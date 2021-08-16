@@ -209,11 +209,8 @@ void vram_to_8bpp(uint8_t* vram, uint8_t* buffer) {
 
 uint32_t video_callback(uint32_t interval, system_state* state) {
   SDL_Event e;
-  SDL_UserEvent ue;
-
-  ue.type = SDL_USEREVENT;
+  
   e.type = SDL_USEREVENT;
-  e.user = ue;
   SDL_PushEvent(&e);
   
   return 8;
