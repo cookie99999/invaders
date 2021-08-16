@@ -53,3 +53,9 @@ dkms.conf
 
 #emacs autosave
 *~
+
+#binaries
+*.bin
+invaders
+disas
+emu8080
