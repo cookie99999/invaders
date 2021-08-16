@@ -65,6 +65,7 @@ int main() {
     printf("<ERROR> failed allocating %d bytes\n", SCREEN_X * SCREEN_Y);
     exit(EXIT_FAILURE);
   }
+  
   bool done = false;
 
   SDL_Window* window = NULL;
