@@ -24,7 +24,7 @@ static system_state* init_state() {
     exit(EXIT_FAILURE);
   }
   
-  state->memory = malloc(MEMSIZE);
+  state->memory = calloc(1, MEMSIZE);
 
   if (!state->memory) {
     printf("<ERROR> failed allocating %d bytes\n", MEMSIZE);
@@ -42,7 +42,7 @@ static void del_state(system_state* state) {
   free(state);
 }
 
-int main() {
+int main(int argc, char** argv) {
   system_state* state = init_state();
 
   FILE* f = fopen("invaders.bin", "rb");
@@ -55,7 +55,7 @@ int main() {
   fseek(f, 0L, SEEK_END);
   unsigned long fsize = (unsigned long) ftell(f);
   fseek(f, 0L, SEEK_SET);
-
+  //todo: make sure input file fits in allocated memory
   fread(state->memory, fsize, 1, f);
   fclose(f);
   

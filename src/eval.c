@@ -57,6 +57,11 @@ static void ret_jmp_call_rst(uint8_t* opcode, uint8_t low, uint8_t high, system_
     break;
   case 1: //JMP
     if (conditions[cond_bits] || extra_bit) {
+      //debug
+      if (((opcode[2] << 8) | opcode[1]) == 0x00) {
+	printf("<DEBUG> cp/m warm reboot\n");
+	exit(EXIT_FAILURE);
+      }
       state->pc = (uint16_t) (high << 8) | low;
     } else {
       state->pc += 2;
@@ -64,22 +69,22 @@ static void ret_jmp_call_rst(uint8_t* opcode, uint8_t low, uint8_t high, system_
     break;
   case 2: //CALL
     //debug
-    /*if (((opcode[2] << 8) | opcode[1]) == 0x0005) {
+    if (((opcode[2] << 8) | opcode[1]) == 0x0005) {
       if (state->c == 9) { //cp/m print routine
 	uint16_t offset = (uint16_t) (state->d << 8) | state->e;
-	char* str = (char*) &state->memory[offset+3];
+	char* str = (char*) &state->memory[offset];
 	while (*str != '$')
 	  printf("%c", *str++);
 	printf("\n");
 	state->pc += 2;
       } else if (state->c == 2) {
-	printf("print char routine called\n");
+	printf("%c", state->e);
 	state->pc += 2;
       }
     } else if (((opcode[2] << 8) | opcode[1]) == 0) {
       state->pc += 2;
       exit(EXIT_SUCCESS);
-      } else */{
+      } else {
       if (conditions[cond_bits] || extra_bit) {
 	mem_write(state, (uint8_t) (ret >> 8) & 0xff, state->sp - 1);
 	mem_write(state, (uint8_t) ret & 0xff, state->sp - 2);
@@ -105,10 +110,11 @@ static void ret_jmp_call_rst(uint8_t* opcode, uint8_t low, uint8_t high, system_
 }
 
 void mem_write(system_state* state, uint8_t byte, uint16_t address) {
-  if (address < 0x2000) {
+  /*if (address < 0x2000) {
     printf("<INFO> write to ROM attempted (%d)\n", address);
     return;
-  }
+    }*/ //TODO: set up for machines other than space invaders, as they
+        //have different memory layouts
 
   if (address < 0x4000 && address > 0x23ff) {
     state->vram_changed = true;
@@ -594,6 +600,7 @@ bool eval_opcode(system_state* state) {
 			&state->b, &state->c, &state->d, &state->e,
 			&state->h, &state->l, &state->memory[hl_ptr],
 			&state->a};
+      uint8_t top = (state->a & 0xf0);
       switch (instr_bits) {
       case 0: //ADD
 	result = (uint16_t) state->a + (uint16_t) *reg[reg_bits];
@@ -601,7 +608,7 @@ bool eval_opcode(system_state* state) {
 	state->f.z = ((result & 0xff) == 0);
 	state->f.s = ((result & 0x80) != 0);
 	state->f.p = parity8(result & 0xff);
-	//TODO: ac
+	state->f.ac = (((state->a & 0xf) + *reg[reg_bits]) > 0xf);
 	state->a = (uint8_t) result & 0xff;
 	break;
       case 1: //ADC
@@ -865,7 +872,7 @@ bool eval_opcode(system_state* state) {
     state->a = ~state->a;
     break;
   case 0x27: //DAA
-    printf("<INFO> DAA not currently implemented\n");
+    //printf("<INFO> DAA not currently implemented\n");
     break;
   case 0x10:
   case 0x20:

@@ -59,3 +59,5 @@ dkms.conf
 invaders
 disas
 emu8080
+*.COM
+obj/

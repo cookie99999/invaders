@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdbool.h>
+#include <string.h>
 #include "eval.h"
 #include "disas.h"
 
@@ -14,7 +15,7 @@ static system_state* init_state() {
     exit(EXIT_FAILURE);
   }
   
-  state->memory = malloc(MEMSIZE);
+  state->memory = calloc(1, MEMSIZE);
 
   if (!state->memory) {
     printf("<ERROR> failed allocating %d bytes\n", MEMSIZE);
@@ -30,8 +31,8 @@ static void del_state(system_state* state) {
 }
 
 int main(int argc, char** argv) {
-  if (argc != 2) {
-    printf("Usage: emu8080 <file>\n");
+  if (argc < 2) {
+    printf("Usage: emu8080 <file> [--cpm]\n");
     exit(EXIT_FAILURE);
   }
 
@@ -49,7 +50,12 @@ int main(int argc, char** argv) {
   unsigned long fsize = (unsigned long) ftell(f);
   fseek(f, 0L, SEEK_SET);
 
-  fread(state->memory, fsize, 1, f);
+  //todo: make sure input file fits in allocated memory
+  if (!strcmp(argv[2], "--cpm")) {
+    fread(&state->memory[0x100], fsize, 1, f);
+  } else {
+    fread(state->memory, fsize, 1, f);
+  }
   fclose(f);
 
   while (!done) {
