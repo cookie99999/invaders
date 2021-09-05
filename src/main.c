@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <stdbool.h>
+#include <threads.h>
 #include <SDL2/SDL.h>
 #include "8080.h"
 #include "eval.h"
@@ -35,6 +36,28 @@ static system_state* init_state() {
   state->ime = true;
   
   return state;
+}
+
+static int cpu_thread(void* _state) {
+  system_state* restrict state = _state;
+  bool done = false;
+  
+  while (!done) {
+    uint8_t* opcode = &state->memory[state->pc];
+    state->vram_changed = false;
+    
+    if (*opcode == 0xdb) { //IN
+      uint8_t port = opcode[1];
+      state->a = port_in(state, port);
+    } else if (*opcode == 0xd3) { //OUT
+      uint8_t port = opcode[1];
+      port_out(state, port);
+    }
+   
+    done = eval_opcode(state);
+  }
+
+  return 0;
 }
 
 static void del_state(system_state* state) {
@@ -108,18 +131,10 @@ int main(int argc, char** argv) {
   SDL_UpdateWindowSurface(window);
 
   SDL_AddTimer(16, video_callback, (void*) state);
+  thrd_t cpu;
+  thrd_create(cpu, cpu_thread, state);
+  
   while (!done) {
-    uint8_t* opcode = &state->memory[state->pc];
-
-    if (*opcode == 0xdb) { //IN
-      uint8_t port = opcode[1];
-      state->a = port_in(state, port);
-    } else if (*opcode == 0xd3) { //OUT
-      uint8_t port = opcode[1];
-      port_out(state, port);
-    }
-    state->vram_changed = false;
-    done = eval_opcode(state);
     if (state->vram_changed) {
       vram_to_8bpp(vram, buffer);
       if (0 > SDL_BlitSurface(buf_surface, NULL, surface, NULL)) {

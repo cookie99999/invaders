@@ -11,7 +11,7 @@ vpath %.h src
 all: invaders emu8080 disas
 
 invaders: main.o invaders.o eval.o disas_core.o
-	$(CC) -o $@ $^ `sdl2-config --cflags --libs`
+	$(CC) -o $@ $^ `sdl2-config --cflags --libs` -lpthread
 main.o: main.c invaders.h 8080.h eval.h
 	$(CC) -c $< $(CFLAGS)
 invaders.o: invaders.c invaders.h 8080.h eval.h

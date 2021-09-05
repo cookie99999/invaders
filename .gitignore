@@ -60,4 +60,6 @@ invaders
 disas
 emu8080
 *.COM
+*.com
 obj/
+*Zone.Identifier

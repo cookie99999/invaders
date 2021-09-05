@@ -69,7 +69,7 @@ static void ret_jmp_call_rst(uint8_t* opcode, uint8_t low, uint8_t high, system_
     break;
   case 2: //CALL
     //debug
-    if (((opcode[2] << 8) | opcode[1]) == 0x0005) {
+    /*if (((opcode[2] << 8) | opcode[1]) == 0x0005) {
       if (state->c == 9) { //cp/m print routine
 	uint16_t offset = (uint16_t) (state->d << 8) | state->e;
 	char* str = (char*) &state->memory[offset];
@@ -84,7 +84,7 @@ static void ret_jmp_call_rst(uint8_t* opcode, uint8_t low, uint8_t high, system_
     } else if (((opcode[2] << 8) | opcode[1]) == 0) {
       state->pc += 2;
       exit(EXIT_SUCCESS);
-      } else {
+      } else*/ {
       if (conditions[cond_bits] || extra_bit) {
 	mem_write(state, (uint8_t) (ret >> 8) & 0xff, state->sp - 1);
 	mem_write(state, (uint8_t) ret & 0xff, state->sp - 2);
@@ -110,10 +110,10 @@ static void ret_jmp_call_rst(uint8_t* opcode, uint8_t low, uint8_t high, system_
 }
 
 void mem_write(system_state* state, uint8_t byte, uint16_t address) {
-  /*if (address < 0x2000) {
+  if (address < 0x2000) {
     printf("<INFO> write to ROM attempted (%d)\n", address);
     return;
-    }*/ //TODO: set up for machines other than space invaders, as they
+    } //TODO: set up for machines other than space invaders, as they
         //have different memory layouts
 
   if (address < 0x4000 && address > 0x23ff) {
@@ -125,9 +125,9 @@ void mem_write(system_state* state, uint8_t byte, uint16_t address) {
 
 bool eval_opcode(system_state* state) {
   unsigned char* opcode = &state->memory[state->pc];
-  //disas_opcode(state->memory, state->pc);
-  //printf("\tC=%d,P=%d,S=%d,Z=%d\n", state->f.cy, state->f.p, state->f.s, state->f.z);
-  //printf("\tA $%02x B $%02x C $%02x D $%02x E $%02x H $%02x L $%02x SP $%04x\n", state->a, state->b, state->c, state->d, state->e, state->h, state->l, state->sp);
+  disas_opcode(state->memory, state->pc);
+  printf("\tC=%d,P=%d,S=%d,Z=%d\n", state->f.cy, state->f.p, state->f.s, state->f.z);
+  printf("\tA $%02x B $%02x C $%02x D $%02x E $%02x H $%02x L $%02x SP $%04x\n", state->a, state->b, state->c, state->d, state->e, state->h, state->l, state->sp);
   state->pc++;
   
   switch (*opcode) {
@@ -600,7 +600,7 @@ bool eval_opcode(system_state* state) {
 			&state->b, &state->c, &state->d, &state->e,
 			&state->h, &state->l, &state->memory[hl_ptr],
 			&state->a};
-      uint8_t top = (state->a & 0xf0);
+      uint8_t bottom = (state->a & 0xf);
       switch (instr_bits) {
       case 0: //ADD
 	result = (uint16_t) state->a + (uint16_t) *reg[reg_bits];
@@ -608,7 +608,7 @@ bool eval_opcode(system_state* state) {
 	state->f.z = ((result & 0xff) == 0);
 	state->f.s = ((result & 0x80) != 0);
 	state->f.p = parity8(result & 0xff);
-	state->f.ac = (((state->a & 0xf) + *reg[reg_bits]) > 0xf);
+	state->f.ac = ((bottom + (*reg[reg_bits] & 0xf)) > 0xf);
 	state->a = (uint8_t) result & 0xff;
 	break;
       case 1: //ADC
@@ -617,7 +617,7 @@ bool eval_opcode(system_state* state) {
 	state->f.z = ((result & 0xff) == 0);
 	state->f.s = ((result & 0x80) != 0);
 	state->f.p = parity8(result & 0xff);
-	//TODO: ac
+	state->f.ac = ((bottom + (*reg[reg_bits] & 0xf) + state->f.cy) > 0xf);
 	state->a = (uint8_t) result & 0xff;
 	break;
       case 2: //SUB
@@ -626,7 +626,7 @@ bool eval_opcode(system_state* state) {
 	state->f.z = ((result & 0xff) == 0);
 	state->f.s = ((result & 0x80) != 0);
 	state->f.p = parity8(result & 0xff);
-	//TODO: ac
+	state->f.ac = ((bottom + ((~*reg[reg_bits]) & 0xf) + 1) > 0xf);
 	state->a = (uint8_t) result & 0xff;
 	break;
       case 3: //SBB
@@ -635,7 +635,7 @@ bool eval_opcode(system_state* state) {
 	state->f.z = ((result & 0xff) == 0);
 	state->f.s = ((result & 0x80) != 0);
 	state->f.p = parity8(result & 0xff);
-	//TODO: ac
+	state->f.ac = ((bottom + (~(*reg[reg_bits] + state->f.cy) & 0xf) + 1) > 0xf);
 	state->a = (uint8_t) result & 0xff;
 	break;
       case 4: //ANA
@@ -668,7 +668,7 @@ bool eval_opcode(system_state* state) {
 	state->f.z = ((result & 0xff) == 0);
 	state->f.s = ((result & 0x80) != 0);
 	state->f.p = parity8(result & 0xff);
-	//TODO: ac
+	state->f.ac = ((bottom + ((~*reg[reg_bits]) & 0xf) + 1) > 0xf);
 	break;
       default:
 	printf("<ERROR> invalid instruction in 8 bit register/memory to accumulator opcode\n");
