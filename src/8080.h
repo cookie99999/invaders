@@ -3,16 +3,16 @@
 
 #include <stdint.h>
 #include <stdbool.h>
-#include <stdatomic.h>
+//#include <stdatomic.h>
 
-typedef struct flags {
-  uint8_t z:1;
-  uint8_t s:1;
-  uint8_t p:1;
-  uint8_t cy:1;
-  uint8_t ac:1;
-  uint8_t pad:3;
-} flags;
+struct flags {
+  uint8_t z : 1;
+  uint8_t s : 1;
+  uint8_t p : 1;
+  uint8_t cy : 1;
+  uint8_t ac : 1;
+  uint8_t pad : 3;
+};
 
 typedef struct system_state {
   uint8_t a;
@@ -31,6 +31,8 @@ typedef struct system_state {
   uint8_t shift0;
   uint8_t shift1;
   bool vram_changed;
+  int type;
+  unsigned long cyc;
   uint8_t last_interrupt;
   uint8_t ports[256];
 } system_state;

@@ -5,6 +5,29 @@
 #include "eval.h"
 #include "disas.h"
 
+//this table from github.com/superzazu/8080
+//Copyright (c) 2018 Nicolas Allemand
+
+static const uint8_t OPCODES_CYCLES[256] = {
+  //  0  1   2   3   4   5   6   7   8  9   A   B   C   D   E  F
+  4, 10, 7,  5,  5,  5,  7,  4,  4, 10, 7,  5,  5,  5,  7, 4,  // 0
+  4, 10, 7,  5,  5,  5,  7,  4,  4, 10, 7,  5,  5,  5,  7, 4,  // 1
+  4, 10, 16, 5,  5,  5,  7,  4,  4, 10, 16, 5,  5,  5,  7, 4,  // 2
+  4, 10, 13, 5,  10, 10, 10, 4,  4, 10, 13, 5,  5,  5,  7, 4,  // 3
+  5, 5,  5,  5,  5,  5,  7,  5,  5, 5,  5,  5,  5,  5,  7, 5,  // 4
+  5, 5,  5,  5,  5,  5,  7,  5,  5, 5,  5,  5,  5,  5,  7, 5,  // 5
+  5, 5,  5,  5,  5,  5,  7,  5,  5, 5,  5,  5,  5,  5,  7, 5,  // 6
+  7, 7,  7,  7,  7,  7,  7,  7,  5, 5,  5,  5,  5,  5,  7, 5,  // 7
+  4, 4,  4,  4,  4,  4,  7,  4,  4, 4,  4,  4,  4,  4,  7, 4,  // 8
+  4, 4,  4,  4,  4,  4,  7,  4,  4, 4,  4,  4,  4,  4,  7, 4,  // 9
+  4, 4,  4,  4,  4,  4,  7,  4,  4, 4,  4,  4,  4,  4,  7, 4,  // A
+  4, 4,  4,  4,  4,  4,  7,  4,  4, 4,  4,  4,  4,  4,  7, 4,  // B
+  5, 10, 10, 10, 11, 11, 7,  11, 5, 10, 10, 10, 11, 17, 7, 11, // C
+  5, 10, 10, 10, 11, 11, 7,  11, 5, 10, 10, 10, 11, 17, 7, 11, // D
+  5, 10, 10, 18, 11, 11, 7,  11, 5, 5,  10, 4,  11, 17, 7, 11, // E
+  5, 10, 10, 4,  11, 11, 7,  11, 5, 5,  10, 4,  11, 17, 7, 11  // F
+};
+
 static void unimplemented_instr(system_state* state) {
   printf("<ERROR> unimplemented instruction\n");
   //state->pc--;
@@ -31,7 +54,7 @@ static void mov_8_imm_reg(uint8_t* dest, uint8_t value, system_state* state) {
 }
 
 static void mov_8_imm_mem(system_state* state, uint8_t value) {
-  mem_write(state, value, (uint16_t) (state->h << 8) | state->l);
+  mem_write(state, value, (uint16_t)(state->h << 8) | state->l);
   state->pc++; //2 byte instruction
 }
 
@@ -43,16 +66,18 @@ static void ret_jmp_call_rst(uint8_t* opcode, uint8_t low, uint8_t high, system_
   uint16_t rst_ret = state->pc; //pc is already incremented before evaluation
 
   uint8_t conditions[] = {
-			  !state->f.z, state->f.z,
-			  !state->f.cy, state->f.cy,
-			  !state->f.p, state->f.p,
-			  !state->f.s, state->f.s };
+    !state->f.z, state->f.z,
+    !state->f.cy, state->f.cy,
+    !state->f.p, state->f.p,
+    !state->f.s, state->f.s };
 
   switch (instr_bits) {
   case 0: //RET
     if (conditions[cond_bits] || extra_bit) {
-      state->pc = (uint16_t) (state->memory[state->sp + 1] << 8) | state->memory[state->sp];
+      state->pc = (uint16_t)(state->memory[state->sp + 1] << 8) | state->memory[state->sp];
       state->sp += 2;
+      if (!extra_bit)
+	state->cyc += 6;
     }
     break;
   case 1: //JMP
@@ -60,16 +85,16 @@ static void ret_jmp_call_rst(uint8_t* opcode, uint8_t low, uint8_t high, system_
       //debug
       if (((opcode[2] << 8) | opcode[1]) == 0x00) {
 	printf("<DEBUG> cp/m warm reboot\n");
-	exit(EXIT_FAILURE);
+	exit(EXIT_SUCCESS);
       }
-      state->pc = (uint16_t) (high << 8) | low;
-    } else {
+      state->pc = (uint16_t)(high << 8) | low;
+    }
+    else {
       state->pc += 2;
     }
     break;
   case 2: //CALL
-    //debug
-    /*if (((opcode[2] << 8) | opcode[1]) == 0x0005) {
+    if (((opcode[2] << 8) | opcode[1]) == 0x0005) {
       if (state->c == 9) { //cp/m print routine
 	uint16_t offset = (uint16_t) (state->d << 8) | state->e;
 	char* str = (char*) &state->memory[offset];
@@ -84,22 +109,25 @@ static void ret_jmp_call_rst(uint8_t* opcode, uint8_t low, uint8_t high, system_
     } else if (((opcode[2] << 8) | opcode[1]) == 0) {
       state->pc += 2;
       exit(EXIT_SUCCESS);
-      } else*/ {
+    } else {
       if (conditions[cond_bits] || extra_bit) {
-	mem_write(state, (uint8_t) (ret >> 8) & 0xff, state->sp - 1);
-	mem_write(state, (uint8_t) ret & 0xff, state->sp - 2);
+	mem_write(state, (uint8_t)(ret >> 8) & 0xff, state->sp - 1);
+	mem_write(state, (uint8_t)ret & 0xff, state->sp - 2);
 	state->sp -= 2;
-	state->pc = (uint16_t) (high << 8) | low;
-      } else {
+	state->pc = (uint16_t)(high << 8) | low;
+	if (!extra_bit)
+	  state->cyc += 6;
+      }
+      else {
 	state->pc += 2;
       }
     }
     break;
   case 3: //RST
-    mem_write(state, (uint8_t) (rst_ret >> 8) & 0xff, state->sp - 1);
-    mem_write(state, (uint8_t) rst_ret & 0xff, state->sp - 2);
+    mem_write(state, (uint8_t)(rst_ret >> 8) & 0xff, state->sp - 1);
+    mem_write(state, (uint8_t)rst_ret & 0xff, state->sp - 2);
     state->sp -= 2;
-    state->pc = (uint16_t) (cond_bits << 3) & 0b0000000000111000;
+    state->pc = (uint16_t)(cond_bits << 3) & 0x0038;
     //the same bits for condition are used as vector in rst
     break;
   default:
@@ -110,14 +138,16 @@ static void ret_jmp_call_rst(uint8_t* opcode, uint8_t low, uint8_t high, system_
 }
 
 void mem_write(system_state* state, uint8_t byte, uint16_t address) {
-  if (address < 0x2000) {
-    printf("<INFO> write to ROM attempted (%d)\n", address);
-    return;
+  if (state->type == 0) { //todo: set up enum for machine types
+    if (address < 0x2000) {
+      printf("<INFO> write to ROM attempted (%d)\n", address);
+      return;
     } //TODO: set up for machines other than space invaders, as they
-        //have different memory layouts
+    //have different memory layouts
 
-  if (address < 0x4000 && address > 0x23ff) {
-    state->vram_changed = true;
+    if (address < 0x4000 && address > 0x23ff) {
+      state->vram_changed = true;
+    }
   }
 
   state->memory[address] = byte;
@@ -125,15 +155,18 @@ void mem_write(system_state* state, uint8_t byte, uint16_t address) {
 
 bool eval_opcode(system_state* state) {
   unsigned char* opcode = &state->memory[state->pc];
+  state->cyc += OPCODES_CYCLES[*opcode];
+#ifdef DEBUG
   disas_opcode(state->memory, state->pc);
-  printf("\tC=%d,P=%d,S=%d,Z=%d\n", state->f.cy, state->f.p, state->f.s, state->f.z);
+  printf("\tC=%d,A=%d,P=%d,S=%d,Z=%d\n", state->f.cy, state->f.ac, state->f.p, state->f.s, state->f.z);
   printf("\tA $%02x B $%02x C $%02x D $%02x E $%02x H $%02x L $%02x SP $%04x\n", state->a, state->b, state->c, state->d, state->e, state->h, state->l, state->sp);
+#endif
   state->pc++;
-  
+
   switch (*opcode) {
-  //8 bit move/store/load
+    //8 bit move/store/load
   case 0x02: //STAX B
-    mem_write(state, state->a, (uint16_t) (state->b << 8) | state->c);
+    mem_write(state, state->a, (uint16_t)(state->b << 8) | state->c);
     break;
   case 0x06: //MVI B, d8
     mov_8_imm_reg(&state->b, opcode[1], state);
@@ -145,7 +178,7 @@ bool eval_opcode(system_state* state) {
     mov_8_imm_reg(&state->c, opcode[1], state);
     break;
   case 0x12: //STAX D
-    mem_write(state, state->a, (uint16_t) (state->d << 8) | state->e);
+    mem_write(state, state->a, (uint16_t)(state->d << 8) | state->e);
     break;
   case 0x16: //MVI D, d8
     mov_8_imm_reg(&state->d, opcode[1], state);
@@ -163,7 +196,7 @@ bool eval_opcode(system_state* state) {
     mov_8_imm_reg(&state->l, opcode[1], state);
     break;
   case 0x32: //STA a16
-    mem_write(state, state->a, (uint16_t) (opcode[2] << 8) | opcode[1]);
+    mem_write(state, state->a, (uint16_t)(opcode[2] << 8) | opcode[1]);
     state->pc += 2; //3 bytes instruction
     break;
   case 0x36: //MVI M, d8
@@ -176,11 +209,11 @@ bool eval_opcode(system_state* state) {
   case 0x3e: //MVI A, d8
     mov_8_imm_reg(&state->a, opcode[1], state);
     break;
-  //MOV reg-reg instructions
-  //MOV is coded as 01[3 bit dest][3 bit src]
-  //dest and src count up b,c,d,e,h,l,m,a in binary
-  //to mask out dest & with 0x38
-  //to mask out src & with 0x07
+    //MOV reg-reg instructions
+    //MOV is coded as 01[3 bit dest][3 bit src]
+    //dest and src count up b,c,d,e,h,l,m,a in binary
+    //to mask out dest & with 0x38
+    //to mask out src & with 0x07
   case 0x40:
   case 0x41:
   case 0x42:
@@ -245,13 +278,13 @@ bool eval_opcode(system_state* state) {
   case 0x7e:
   case 0x7f:
     {
-      uint16_t hl_ptr = (uint16_t) (state->h << 8) | state->l;
+      uint16_t hl_ptr = (uint16_t)(state->h << 8) | state->l;
       uint8_t* regarray[] = {
-			     &state->b, &state->c,
-			     &state->d, &state->e,
-			     &state->h, &state->l,
-			     &state->memory[hl_ptr], &state->a };
-      uint8_t* dest,* src;
+	&state->b, &state->c,
+	&state->d, &state->e,
+	&state->h, &state->l,
+	&state->memory[hl_ptr], &state->a };
+      uint8_t* dest, * src;
       uint8_t destbits, srcbits;
       destbits = (*opcode & 0x38) >> 3; //0b00111000
       srcbits = *opcode & 0x07; //00000111
@@ -260,28 +293,29 @@ bool eval_opcode(system_state* state) {
 
       if (destbits == 6) { //memory
 	mem_write(state, *src, hl_ptr);
-      } else {
+      }
+      else {
 	mov_8_reg_reg(dest, src);
       }
       break;
     }
-  //16 bit load/store/move
+    //16 bit load/store/move
   case 0xc5:
   case 0xd5:
   case 0xe5:
   case 0xf5:
     //PUSH
     {
-      uint8_t flags = (uint8_t) ((state->f.s != 0) << 7)		\
-	| ((state->f.z != 0) << 6) | 0 |				\
-	((state->f.ac != 0) << 4) | 0 |					\
-				       ((state->f.p != 0) << 2) | 0b10 |	\
+      uint8_t flags = (uint8_t)((state->f.s != 0) << 7)		\
+	| ((state->f.z != 0) << 6) | 0 | \
+	((state->f.ac != 0) << 4) | 0 | \
+	((state->f.p != 0) << 2) | 0x02 | \
 	(state->f.cy != 0);
       uint8_t* rp[4][2] = {
-			 {&state->b, &state->c},
-			 {&state->d, &state->e},
-			 {&state->h, &state->l},
-			 {&state->a, &flags} };
+	{&state->b, &state->c},
+	{&state->d, &state->e},
+	{&state->h, &state->l},
+	{&state->a, &flags} };
       uint8_t rp_bits = (*opcode & 0x35) >> 4; //11xx0101
       mem_write(state, *rp[rp_bits][0], state->sp - 1);
       mem_write(state, *rp[rp_bits][1], state->sp - 2);
@@ -295,17 +329,17 @@ bool eval_opcode(system_state* state) {
     //POP
     {
       uint8_t* rp[3][2] = {
-			   {&state->b, &state->c},
-			   {&state->d, &state->e},
-			   {&state->h, &state->l} };
+	{&state->b, &state->c},
+	{&state->d, &state->e},
+	{&state->h, &state->l} };
       uint8_t rp_bits = (*opcode & 0x35) >> 4; //11xx0001
-      if (rp_bits == 0b11) {
+      if (rp_bits == 0x03) {
 	uint8_t flags = state->memory[state->sp];
-	state->f.s = (flags & 0b10000000) >> 7;
-	state->f.z = (flags & 0b01000000) >> 6;
-	state->f.ac = (flags & 0b00010000) >> 4;
-	state->f.p = (flags & 0b00000100) >> 2;
-	state->f.cy = (flags & 0b00000001);
+	state->f.s = (flags & 0x80) >> 7;
+	state->f.z = (flags & 0x40) >> 6;
+	state->f.ac = (flags & 0x10) >> 4;
+	state->f.p = (flags & 0x04) >> 2;
+	state->f.cy = (flags & 0x01);
 	state->a = state->memory[state->sp + 1];
 	state->sp += 2;
 	break;
@@ -336,7 +370,7 @@ bool eval_opcode(system_state* state) {
 	state->l = opcode[1];
 	break;
       case 3:
-	state->sp = (uint16_t) (opcode[2] << 8) | opcode[1];
+	state->sp = (uint16_t)(opcode[2] << 8) | opcode[1];
 	break;
       default:
 	printf("<ERROR> invalid register pair in LXI\n");
@@ -348,8 +382,8 @@ bool eval_opcode(system_state* state) {
     }
   case 0x22:
     //SHLD a16
-    mem_write(state, state->l, (uint16_t) (opcode[2] << 8) | opcode[1]);
-    mem_write(state, state->h, (uint16_t) ((opcode[2] << 8) | opcode[1]) + 1);
+    mem_write(state, state->l, (uint16_t)(opcode[2] << 8) | opcode[1]);
+    mem_write(state, state->h, (uint16_t)((opcode[2] << 8) | opcode[1]) + 1);
     state->pc += 2; //3 byte instruction
     break;
   case 0x2a:
@@ -371,7 +405,7 @@ bool eval_opcode(system_state* state) {
     }
   case 0xf9:
     //SPHL
-    state->sp = (uint16_t) (state->h << 8) | state->l;
+    state->sp = (uint16_t)(state->h << 8) | state->l;
     break;
   case 0xeb:
     //XCHG
@@ -384,10 +418,10 @@ bool eval_opcode(system_state* state) {
       state->e = tmp;
       break;
     }
-  //jumps and calls
+    //jumps and calls
   case 0xe9:
     //PCHL
-    state->pc = (uint16_t) (state->h << 8) | state->l;
+    state->pc = (uint16_t)(state->h << 8) | state->l;
     break;
   case 0xc2:
   case 0xc8:
@@ -420,14 +454,14 @@ bool eval_opcode(system_state* state) {
   case 0xdd:
   case 0xed:
   case 0xfd:
-      if (*opcode == 0xcb)
-	printf("<INFO> alternate JMP used\n");
-      if ((*opcode & 0x0f) == 0x0d && (*opcode & 0xf0) != 0xc0)
-	printf("<INFO> alternate call instruction used\n");
-      if (*opcode == 0xd9)
-	printf("<INFO> alternate RET used\n");
-      ret_jmp_call_rst(opcode, opcode[1], opcode[2], state);
-      break;
+    if (*opcode == 0xcb)
+      printf("<INFO> alternate JMP used\n");
+    if ((*opcode & 0x0f) == 0x0d && (*opcode & 0xf0) != 0xc0)
+      printf("<INFO> alternate call instruction used\n");
+    if (*opcode == 0xd9)
+      printf("<INFO> alternate RET used\n");
+    ret_jmp_call_rst(opcode, opcode[1], opcode[2], state);
+    break;
   case 0x03:
   case 0x13:
   case 0x23:
@@ -437,17 +471,17 @@ bool eval_opcode(system_state* state) {
       uint16_t tmp;
       uint8_t rp_bits = (*opcode & 0x30) >> 4;
       uint8_t* rp[][2] = {
-			  {&state->b, &state->c},
-			  {&state->d, &state->e},
-			  {&state->h, &state->l} };
+	{&state->b, &state->c},
+	{&state->d, &state->e},
+	{&state->h, &state->l} };
       switch (rp_bits) {
       case 0:
       case 1:
       case 2:
-	tmp = (uint16_t) ((*rp[rp_bits][0] << 8) | *rp[rp_bits][1]);
+	tmp = (uint16_t)((*rp[rp_bits][0] << 8) | *rp[rp_bits][1]);
 	tmp++;
-	*rp[rp_bits][0] = (uint8_t) (tmp >> 8) & 0x00ff;
-	*rp[rp_bits][1] = (uint8_t) tmp & 0x00ff;
+	*rp[rp_bits][0] = (uint8_t)(tmp >> 8) & 0x00ff;
+	*rp[rp_bits][1] = (uint8_t)tmp & 0x00ff;
 	break;
       case 3:
 	state->sp++;
@@ -468,17 +502,17 @@ bool eval_opcode(system_state* state) {
       uint16_t tmp;
       uint8_t rp_bits = (*opcode & 0x30) >> 4;
       uint8_t* rp[][2] = {
-			  {&state->b, &state->c},
-			  {&state->d, &state->e},
-			  {&state->h, &state->l} };
+	{&state->b, &state->c},
+	{&state->d, &state->e},
+	{&state->h, &state->l} };
       switch (rp_bits) {
       case 0:
       case 1:
       case 2:
-	tmp = (uint16_t) ((*rp[rp_bits][0] << 8) | *rp[rp_bits][1]);
+	tmp = (uint16_t)((*rp[rp_bits][0] << 8) | *rp[rp_bits][1]);
 	tmp--;
-	*rp[rp_bits][0] = (uint8_t) (tmp >> 8) & 0x00ff;
-	*rp[rp_bits][1] = (uint8_t) tmp & 0x00ff;
+	*rp[rp_bits][0] = (uint8_t)(tmp >> 8) & 0x00ff;
+	*rp[rp_bits][1] = (uint8_t)tmp & 0x00ff;
 	break;
       case 3:
 	state->sp--;
@@ -499,25 +533,25 @@ bool eval_opcode(system_state* state) {
       uint32_t result; //higher precision to capture carry
       uint8_t rp_bits = (*opcode & 0x30) >> 4;
       uint8_t* rp[][2] = {
-			  {&state->b, &state->c},
-			  {&state->d, &state->e},
-			  {&state->h, &state->l} };
+	{&state->b, &state->c},
+	{&state->d, &state->e},
+	{&state->h, &state->l} };
       switch (rp_bits) {
       case 0:
       case 1:
       case 2:
-	result = (uint32_t) ((state->h << 8) | state->l) + (uint32_t) ((*rp[rp_bits][0] << 8) | *rp[rp_bits][1]);
+	result = (uint32_t)((state->h << 8) | state->l) + (uint32_t)((*rp[rp_bits][0] << 8) | *rp[rp_bits][1]);
 	state->f.cy = (result > 0xffff);
 	result &= 0xffff;
-	state->h = (uint8_t) (result >> 8) & 0x00ff;
-	state->l = (uint8_t) result & 0x00ff;
+	state->h = (uint8_t)(result >> 8) & 0x00ff;
+	state->l = (uint8_t)result & 0x00ff;
 	break;
       case 3:
-	result = (uint32_t) ((state->h << 8) | state->l) + state->sp;
+	result = (uint32_t)((state->h << 8) | state->l) + state->sp;
 	state->f.cy = (result > 0xffff);
 	result &= 0xffff;
-	state->h = (uint8_t) (result >> 8) & 0x00ff;
-	state->l = (uint8_t) result & 0x00ff;
+	state->h = (uint8_t)(result >> 8) & 0x00ff;
+	state->l = (uint8_t)result & 0x00ff;
 	break;
       default:
 	printf("<ERROR> invalid register pair in DAD\n");
@@ -595,80 +629,84 @@ bool eval_opcode(system_state* state) {
       uint16_t result; //extra precision to get carry bit
       uint8_t instr_bits = (*opcode & 0x38) >> 3;
       uint8_t reg_bits = (*opcode & 0x07);
-      uint16_t hl_ptr = (uint16_t) (state->h << 8) | state->l;
+      uint16_t hl_ptr = (uint16_t)(state->h << 8) | state->l;
       uint8_t* reg[] = {
-			&state->b, &state->c, &state->d, &state->e,
-			&state->h, &state->l, &state->memory[hl_ptr],
-			&state->a};
-      uint8_t bottom = (state->a & 0xf);
+	&state->b, &state->c, &state->d, &state->e,
+	&state->h, &state->l, &state->memory[hl_ptr],
+	&state->a };
+      uint8_t a = state->a;
+      uint8_t b = *reg[reg_bits];
       switch (instr_bits) {
       case 0: //ADD
-	result = (uint16_t) state->a + (uint16_t) *reg[reg_bits];
-	state->f.cy = (result > 0xff);
-	state->f.z = ((result & 0xff) == 0);
-	state->f.s = ((result & 0x80) != 0);
+	result = (uint16_t) (a + b);
+	state->f.ac = ((a & 0xf) + (b & 0xf)) > 0xf;
+	state->f.cy = result > 0xff;
+	state->f.z = (result & 0xff) == 0;
+	state->f.s = (result & 0x80) != 0;
 	state->f.p = parity8(result & 0xff);
-	state->f.ac = ((bottom + (*reg[reg_bits] & 0xf)) > 0xf);
-	state->a = (uint8_t) result & 0xff;
+	state->a = (uint8_t)result & 0xff;
 	break;
       case 1: //ADC
-	result = (uint16_t) state->a + (uint16_t) *reg[reg_bits] + (uint16_t) state->f.cy;
-	state->f.cy = (result > 0xff);
-	state->f.z = ((result & 0xff) == 0);
-	state->f.s = ((result & 0x80) != 0);
+	result = (uint16_t)(a + b + state->f.cy);
+	state->f.ac = ((a & 0xf) + (b & 0xf) + state->f.cy) > 0xf;
+	state->f.cy = result > 0xff;
+	state->f.z = (result & 0xff) == 0;
+	state->f.s = (result & 0x80) != 0;
 	state->f.p = parity8(result & 0xff);
-	state->f.ac = ((bottom + (*reg[reg_bits] & 0xf) + state->f.cy) > 0xf);
-	state->a = (uint8_t) result & 0xff;
+	state->a = (uint8_t)result & 0xff;
 	break;
       case 2: //SUB
-	result = (uint16_t) state->a + (uint16_t) (~*reg[reg_bits]) + 1;
-	state->f.cy = !(result > 0xff);
-	state->f.z = ((result & 0xff) == 0);
-	state->f.s = ((result & 0x80) != 0);
+	result = (uint16_t) (a - b);
+	state->f.ac = ((a & 0xf) + ((~b & 0xff) & 0xf) + 1) > 0xf;
+	state->f.cy = result > 0xff;
+	state->f.z = (result & 0xff) == 0;
+	state->f.s = (result & 0x80) != 0;
 	state->f.p = parity8(result & 0xff);
-	state->f.ac = ((bottom + ((~*reg[reg_bits]) & 0xf) + 1) > 0xf);
-	state->a = (uint8_t) result & 0xff;
+	state->a = (uint8_t)result & 0xff;
 	break;
       case 3: //SBB
-	result = (uint16_t) state->a + (uint16_t) ~(*reg[reg_bits] + state->f.cy) + 1;
-	state->f.cy = !(result > 0xff);
-	state->f.z = ((result & 0xff) == 0);
-	state->f.s = ((result & 0x80) != 0);
+	result = (uint16_t) (a - b - state->f.cy);
+	state->f.ac = ((a & 0xf) + ((~b) & 0xf) + !state->f.cy) > 0xf;
+	state->f.cy = result > 0xff;
+	state->f.z = (result & 0xff) == 0;
+	state->f.s = (result & 0x80) != 0;
 	state->f.p = parity8(result & 0xff);
-	state->f.ac = ((bottom + (~(*reg[reg_bits] + state->f.cy) & 0xf) + 1) > 0xf);
-	state->a = (uint8_t) result & 0xff;
+	state->a = (uint8_t)result & 0xff;
 	break;
       case 4: //ANA
-	result = (uint16_t) state->a & (uint8_t) *reg[reg_bits];
+	result = (uint16_t)state->a & (uint8_t)*reg[reg_bits];
 	state->f.cy = 0;
-	state->f.z = ((result & 0xff) == 0);
-	state->f.s = ((result & 0x80) != 0);
+	state->f.ac = ((a | b) & 0x8) != 0;
+ 	state->f.z = (result & 0xff) == 0;
+	state->f.s = (result & 0x80) != 0;
 	state->f.p = parity8(result & 0xff);
-	state->a = (uint8_t) result & 0xff;
+	state->a = (uint8_t)result & 0xff;
 	break;
       case 5: //XRA
-	result = (uint8_t) state->a ^ (uint8_t) *reg[reg_bits];
+	result = (uint8_t)state->a ^ (uint8_t)*reg[reg_bits];
 	state->f.cy = 0;
-	state->f.z = ((result & 0xff) == 0);
-	state->f.s = ((result & 0x80) != 0);
+	state->f.ac = 0;
+	state->f.z = (result & 0xff) == 0;
+	state->f.s = (result & 0x80) != 0;
 	state->f.p = parity8(result & 0xff);
-	state->a = (uint8_t) result & 0xff;
+	state->a = (uint8_t)result & 0xff;
 	break;
       case 6: //ORA
-	result = (uint8_t) state->a | (uint8_t) *reg[reg_bits];
+	result = (uint8_t)state->a | (uint8_t)*reg[reg_bits];
 	state->f.cy = 0;
-	state->f.z = ((result & 0xff) == 0);
-	state->f.s = ((result & 0x80) != 0);
+	state->f.ac = 0;
+	state->f.z = (result & 0xff) == 0;
+	state->f.s = (result & 0x80) != 0;
 	state->f.p = parity8(result & 0xff);
-	state->a = (uint8_t) result & 0xff;
+	state->a = (uint8_t)result & 0xff;
 	break;
       case 7: //CMP
-	result = (uint16_t) state->a + (uint16_t) (~*reg[reg_bits]) + 1;
-	state->f.cy = !(result > 0xff);
-	state->f.z = ((result & 0xff) == 0);
-	state->f.s = ((result & 0x80) != 0);
+	result = (uint16_t) (a - b);
+	state->f.ac = ((a & 0xf) + ((~b & 0xff) & 0xf) + 1) > 0xf;
+	state->f.cy = result > 0xff;
+	state->f.z = (result & 0xff) == 0;
+	state->f.s = (result & 0x80) != 0;
 	state->f.p = parity8(result & 0xff);
-	state->f.ac = ((bottom + ((~*reg[reg_bits]) & 0xf) + 1) > 0xf);
 	break;
       default:
 	printf("<ERROR> invalid instruction in 8 bit register/memory to accumulator opcode\n");
@@ -687,25 +725,25 @@ bool eval_opcode(system_state* state) {
       switch (instr_bits) {
       case 0: //RLC
 	state->f.cy = (state->a & 0x80) >> 7; //get high bit
-	state->a = (uint8_t) (state->a << 1);
+	state->a = (uint8_t)(state->a << 1);
 	state->a |= state->f.cy;
 	break;
       case 1: //RRC
 	state->f.cy = (state->a & 1);
-	state->a = (uint8_t) ((state->a & 1) << 7) | (uint8_t) (state->a >> 1);
+	state->a = (uint8_t)((state->a & 1) << 7) | (uint8_t)(state->a >> 1);
 	break;
       case 2: //RAL
 	{
 	  uint8_t tmp = state->f.cy;
 	  state->f.cy = (state->a & 0x80) >> 7;
-	  state->a = (uint8_t) (state->a << 1);
+	  state->a = (uint8_t)(state->a << 1);
 	  state->a |= tmp;
 	  break;
 	}
       case 3: //RAR
 	{
-	  uint8_t tmp = (uint8_t) (state->f.cy << 7);
-	  state->f.cy = (state->a & (uint8_t) 0x01);
+	  uint8_t tmp = (uint8_t)(state->f.cy << 7);
+	  state->f.cy = (state->a & (uint8_t)0x01);
 	  state->a = state->a >> 1;
 	  state->a |= tmp;
 	  break;
@@ -729,74 +767,82 @@ bool eval_opcode(system_state* state) {
     {
       uint16_t result; //extra precision to get carry bit
       uint8_t instr_bits = (*opcode & 0x38) >> 3;
+      uint8_t a = state->a;
+      uint8_t b = opcode[1];
       switch (instr_bits) {
       case 0: //ADI
-	result = (uint16_t) state->a + (uint16_t) opcode[1];
-	state->f.cy = (result > 0xff);
-	state->f.z = ((result & 0xff) == 0);
-	state->f.s = ((result & 0x80) != 0);
+	result = (uint16_t) (a + b);
+	state->f.ac = ((a & 0xf) + (b & 0xf)) > 0xf;
+	state->f.cy = result > 0xff;
+	state->f.z = (result & 0xff) == 0;
+	state->f.s = (result & 0x80) != 0;
 	state->f.p = parity8(result & 0xff);
-	//TODO: ac
-	state->a = (uint8_t) result & 0xff;
+	state->a = (uint8_t)result & 0xff;
 	break;
       case 1: //ACI
-	result = (uint16_t) state->a + (uint16_t) opcode[1] + (uint16_t) state->f.cy;
-	state->f.cy = (result > 0xff);
-	state->f.z = ((result & 0xff) == 0);
-	state->f.s = ((result & 0x80) != 0);
+	result = (uint16_t)(a + b + state->f.cy);
+	state->f.ac = ((a & 0xf) + (b & 0xf) + state->f.cy) > 0xf;
+	state->f.cy = result > 0xff;
+	state->f.z = (result & 0xff) == 0;
+	state->f.s = (result & 0x80) != 0;
 	state->f.p = parity8(result & 0xff);
-	//TODO: ac
-	state->a = (uint8_t) result & 0xff;
+	state->a = (uint8_t)result & 0xff;
 	break;
       case 2: //SUI
-	result = (uint16_t) state->a + (uint16_t) (~opcode[1] + 1);
-	state->f.cy = (result > 0xff);
-	state->f.z = ((result & 0xff) == 0);
-	state->f.s = ((result & 0x80) != 0);
+	result = (uint16_t) (a - b);
+	state->f.ac = ((a & 0xf) + ((~b) & 0xf) + 1) > 0xf;
+	state->f.cy = result > 0xff;
+	state->f.z = (result & 0xff) == 0;
+	state->f.s = (result & 0x80) != 0;
 	state->f.p = parity8(result & 0xff);
-	//TODO: ac
-	state->a = (uint8_t) result & 0xff;
+	//state->f.ac = ((result & 0xff) ^ a ^ ~b) & 0x10;
+	state->a = (uint8_t)result & 0xff;
 	break;
       case 3: //SBI
-	result = (uint16_t) state->a + (uint16_t) (~(opcode[1] + state->f.cy) + 1);
-	state->f.cy = (result > 0xff);
-	state->f.z = ((result & 0xff) == 0);
-	state->f.s = ((result & 0x80) != 0);
+	result = (uint16_t) (a - b - state->f.cy);
+	state->f.ac = ((a & 0xf) + ((~b) & 0xf) + !state->f.cy) > 0xf;
+	state->f.cy = result > 0xff;
+	state->f.z = (result & 0xff) == 0;
+	state->f.s = (result & 0x80) != 0;
 	state->f.p = parity8(result & 0xff);
-	//TODO: ac
-	state->a = (uint8_t) result & 0xff;
+	//state->f.ac = ((result & 0xff) ^ a ^ ~b) & 0x10;
+	state->a = (uint8_t)result & 0xff;
 	break;
       case 4: //ANI
 	result = state->a & opcode[1];
 	state->f.cy = 0;
-	state->f.z = ((result & 0xff) == 0);
-	state->f.s = ((result & 0x80) != 0);
+	state->f.ac = ((state->a | opcode[1]) & 0x8) != 0;
+	state->f.z = (result & 0xff) == 0;
+	state->f.s = (result & 0x80) != 0;
 	state->f.p = parity8(result & 0xff);
-	state->a = (uint8_t) result & 0xff;
+	state->a = (uint8_t)result & 0xff;
 	break;
       case 5: //XRI
-	result = (uint8_t) state->a ^ (uint8_t) opcode[1];
+	result = (uint8_t)state->a ^ (uint8_t)opcode[1];
 	state->f.cy = 0;
-	state->f.z = ((result & 0xff) == 0);
-	state->f.s = ((result & 0x80) != 0);
+	state->f.z = (result & 0xff) == 0;
+	state->f.s = (result & 0x80) != 0;
 	state->f.p = parity8(result & 0xff);
-	state->a = (uint8_t) result & 0xff;
+	state->f.ac = 0; //manual says it doesn't affect ac
+	state->a = (uint8_t)result & 0xff;
 	break;
       case 6: //ORI
-	result = (uint8_t) state->a | (uint8_t) opcode[1];
+	result = (uint8_t)state->a | (uint8_t)opcode[1];
 	state->f.cy = 0;
-	state->f.z = ((result & 0xff) == 0);
-	state->f.s = ((result & 0x80) != 0);
+	state->f.ac = 0;
+	state->f.z = (result & 0xff) == 0;
+	state->f.s = (result & 0x80) != 0;
 	state->f.p = parity8(result & 0xff);
-	state->a = (uint8_t) result & 0xff;
+ 	state->a = (uint8_t)result & 0xff;
 	break;
       case 7: //CPI
-	result = (uint16_t) state->a + (uint16_t) (~opcode[1] + 1);
-	state->f.cy = (result > 0xff);
-	state->f.z = ((result & 0xff) == 0);
-	state->f.s = ((result & 0x80) != 0);
+	result = (uint16_t) (a - b);
+	state->f.ac = ((a & 0xf) + ((~b) & 0xf) + 1) > 0xf;
+	state->f.cy = result > 0xff;
+	state->f.z = (result & 0xff) == 0;
+	state->f.s = (result & 0x80) != 0;
 	state->f.p = parity8(result & 0xff);
-	//TODO: ac
+	//state->f.ac = ((result & 0xff) ^ a ^ ~b) & 0x10;
 	break;
       default:
 	printf("<ERROR> invalid instruction in 8 bit immediate arithmetic opcode\n");
@@ -824,18 +870,19 @@ bool eval_opcode(system_state* state) {
     {
       uint8_t result;
       uint8_t reg_bits = (*opcode & 0x38) >> 3;
-      uint16_t hl_ptr = (uint16_t) (state->h << 8) | state->l;
+      uint16_t hl_ptr = (uint16_t)(state->h << 8) | state->l;
       uint8_t* reg[] = {
-			&state->b, &state->c, &state->d, &state->e, &state->h, &state->l,
-			&state->memory[hl_ptr], &state->a};
+	&state->b, &state->c, &state->d, &state->e, &state->h, &state->l,
+	&state->memory[hl_ptr], &state->a };
       result = *reg[reg_bits] + 1;
       state->f.z = (result == 0);
       state->f.s = ((result & 0x80) != 0);
       state->f.p = parity8(result);
-      //todo: ac
+      state->f.ac = (((*reg[reg_bits] & 0x0f) + 1) > 0x0f);
       if (reg_bits == 6) { //memory
 	mem_write(state, result, hl_ptr);
-      } else {
+      }
+      else {
 	*reg[reg_bits] = result;
       }
       break;
@@ -852,18 +899,19 @@ bool eval_opcode(system_state* state) {
     {
       uint8_t result;
       uint8_t reg_bits = (*opcode & 0x38) >> 3;
-      uint16_t hl_ptr = (uint16_t) (state->h << 8) | state->l;
+      uint16_t hl_ptr = (uint16_t)(state->h << 8) | state->l;
       uint8_t* reg[] = {
-			&state->b, &state->c, &state->d, &state->e, &state->h, &state->l,
-			&state->memory[hl_ptr], &state->a};
+	&state->b, &state->c, &state->d, &state->e, &state->h, &state->l,
+	&state->memory[hl_ptr], &state->a };
       result = *reg[reg_bits] - 1;
       state->f.z = (result == 0);
       state->f.s = ((result & 0x80) != 0);
       state->f.p = parity8(result);
-      //todo: ac
+      state->f.ac = (*reg[reg_bits] & 0xf) != 0;
       if (reg_bits == 6) { //memory
 	mem_write(state, result, hl_ptr);
-      } else {
+      }
+      else {
 	*reg[reg_bits] = result;
       }
       break;
@@ -872,7 +920,25 @@ bool eval_opcode(system_state* state) {
     state->a = ~state->a;
     break;
   case 0x27: //DAA
-    //printf("<INFO> DAA not currently implemented\n");
+    {
+      uint16_t tmp = state->a;
+      if (((tmp & 0x0f) > 0x09) || state->f.ac) {
+	state->f.ac = (((tmp & 0x0f) + 0x06) & 0xf0) ? 1 : 0;
+	tmp += 0x06;
+	if (tmp & 0xff00)
+	  state->f.cy = 1;
+      }
+
+      if (((tmp & 0xf0) > 0x90) || state->f.cy) {
+	tmp += 0x60;
+	if (tmp & 0xff00)
+	  state->f.cy = 1;
+      }
+      state->f.z = ((uint8_t)tmp == 0);
+      state->f.s = (((uint8_t)tmp & 0x80) != 0);
+      state->f.p = parity8((uint8_t)tmp);
+      state->a = (uint8_t)tmp;
+    }
     break;
   case 0x10:
   case 0x20:
@@ -905,7 +971,8 @@ bool eval_opcode(system_state* state) {
     unimplemented_instr(state);
     break;
   }
-  state->f.cy = (state->f.cy) ? true : false; //make sure carry is only 0 or 1
+  state->f.ac = (state->f.ac) ? 1 : 0;
+  state->f.cy = (state->f.cy) ? 1 : 0; //make sure carry is only 0 or 1
   //otherwise math instructions will be inaccurate
   //DEBUG
   //getchar();

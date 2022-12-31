@@ -11,17 +11,17 @@ static system_state* init_state() {
   system_state* state = calloc(1, sizeof(system_state));
 
   if (!state) {
-    printf("<ERROR> failed allocating %ld bytes\n", sizeof(system_state));
+    printf("<ERROR> failed allocating %u bytes\n", sizeof(system_state));
     exit(EXIT_FAILURE);
   }
-  
+
   state->memory = calloc(1, MEMSIZE);
 
   if (!state->memory) {
     printf("<ERROR> failed allocating %d bytes\n", MEMSIZE);
     exit(EXIT_FAILURE);
   }
-  
+
   return state;
 }
 
@@ -38,8 +38,9 @@ int main(int argc, char** argv) {
 
   bool done = false;
   system_state* state = init_state();
-  
-  FILE* f = fopen(argv[1], "rb");
+
+  FILE* f = NULL;
+  f = fopen(argv[1], "rb");
 
   if (!f) {
     printf("<ERROR> could not open %s\n", argv[1]);
@@ -47,17 +48,22 @@ int main(int argc, char** argv) {
   }
 
   fseek(f, 0L, SEEK_END);
-  unsigned long fsize = (unsigned long) ftell(f);
+  unsigned long fsize = (unsigned long)ftell(f);
   fseek(f, 0L, SEEK_SET);
 
   //todo: make sure input file fits in allocated memory
-  if (!strcmp(argv[2], "--cpm")) {
-    fread(&state->memory[0x100], fsize, 1, f);
-  } else {
+  if (argc > 2) {
+    if (!strcmp(argv[2], "--cpm")) {
+      fread(&state->memory[0x100], fsize, 1, f);
+      state->pc = 0x100;
+      state->type = 1; //todo: switch to enum
+    }
+  }
+  else {
     fread(state->memory, fsize, 1, f);
   }
   fclose(f);
-
+  
   while (!done) {
     done = eval_opcode(state);
   }
@@ -66,4 +72,4 @@ int main(int argc, char** argv) {
   return EXIT_SUCCESS;
 }
 
-  
+

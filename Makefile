@@ -1,14 +1,17 @@
-CC := clang
+CC := gcc
 WARNINGS := -Wall -Wextra -pedantic -Wshadow -Wpointer-arith -Wcast-align \
             -Wwrite-strings -Wmissing-prototypes -Wmissing-declarations \
             -Wredundant-decls -Wnested-externs -Winline -Wno-long-long \
-            -Wconversion -Wstrict-prototypes
-CFLAGS := -O3 $(WARNINGS) --std=c11
+            -Wstrict-prototypes
+CFLAGS := -O0 $(WARNINGS) --std=c2x -g
 
 vpath %.c src
 vpath %.h src
 
 all: invaders emu8080 disas
+
+debug: CFLAGS += -DDEBUG
+debug: all
 
 invaders: main.o invaders.o eval.o disas_core.o
 	$(CC) -o $@ $^ `sdl2-config --cflags --libs` -lpthread

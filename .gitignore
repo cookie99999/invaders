@@ -41,6 +41,7 @@
 *.su
 *.idb
 *.pdb
+*.stackdump
 
 # Kernel Module Compile Results
 *.mod*
@@ -63,3 +64,8 @@ emu8080
 *.com
 obj/
 *Zone.Identifier
+*.bak
+invaders.e
+invaders.f
+invaders.g
+invaders.h

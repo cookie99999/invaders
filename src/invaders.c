@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdbool.h>
 #include "8080.h"
+#include "eval.h"
 #include "invaders.h"
 
 uint8_t port_in(system_state* state, uint8_t port) {
@@ -14,7 +15,7 @@ uint8_t port_in(system_state* state, uint8_t port) {
     break;
   case 0x03:
     {
-      uint16_t result = (uint16_t) (state->shift1 << 8) | state->shift0;
+      uint16_t result = (uint16_t)(state->shift1 << 8) | state->shift0;
       return ((result >> (8 - state->shift_offset)) & 0x00ff);
       break;
     }
@@ -41,9 +42,11 @@ void port_out(system_state* state, uint8_t port) {
 void fire_interrupt(system_state* state, uint8_t vector) {
   if (!state->ime)
     return;
-  
-  state->memory[state->sp - 1] = (state->pc & 0xff00) >> 8;
-  state->memory[state->sp - 2] = state->pc &0x00ff;
+
+  //state->memory[state->sp - 1] = (state->pc & 0xff00) >> 8;
+  mem_write(state, (state->pc & 0xff00) >> 8, state->sp - 1);
+  //state->memory[state->sp - 2] = state->pc & 0x00ff;
+  mem_write(state, state->pc & 0x00ff, state->sp - 2);
   state->sp -= 2;
 
   state->pc = 8 * vector;
