@@ -145,7 +145,6 @@ int main(int argc, char** argv) {
 
   while (!done) {
     uint8_t* opcode = &state->memory[state->pc];
-    state->vram_changed = false;
 
     if (*opcode == 0xdb) { //IN
       uint8_t port = opcode[1];

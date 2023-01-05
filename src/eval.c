@@ -144,10 +144,6 @@ void mem_write(system_state* state, uint8_t byte, uint16_t address) {
       return;
     } //TODO: set up for machines other than space invaders, as they
     //have different memory layouts
-
-    if (address < 0x4000 && address > 0x23ff) {
-      state->vram_changed = true;
-    }
   }
 
   state->memory[address] = byte;

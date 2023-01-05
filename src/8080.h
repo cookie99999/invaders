@@ -30,7 +30,6 @@ typedef struct system_state {
   uint8_t shift_offset;
   uint8_t shift0;
   uint8_t shift1;
-  bool vram_changed;
   int type;
   unsigned long cyc;
   uint8_t last_interrupt;
