@@ -418,6 +418,54 @@ impl Cpu {
 		self.f.set(PSW::P, ((tmp & 0xff).count_ones() % 2) == 0);
 		self.a = tmp;
 	    },
+	    "CMP" => {
+		let mut tmp = self.a as u16;
+		tmp = tmp.wrapping_sub(s as u16);
+		self.f.set(PSW::A, ((self.a & 0xf) + ((!s & 0xff) & 0xf) + 1) > 0x0f);
+		self.f.set(PSW::C, tmp > 0xff);
+		self.f.set(PSW::Z, (tmp & 0xff) == 0);
+		self.f.set(PSW::S, (tmp & 0x80) != 0);
+		self.f.set(PSW::P, (((tmp & 0xff) as u8).count_ones() % 2) == 0);
+	    },
+	    "CPI" => {
+		let mut tmp = self.a as u16;
+		tmp = tmp.wrapping_sub(op1 as u16);
+		self.f.set(PSW::A, ((self.a & 0xf) + ((!op1 & 0xff) & 0xf) + 1) > 0x0f);
+		self.f.set(PSW::C, tmp > 0xff);
+		self.f.set(PSW::Z, (tmp & 0xff) == 0);
+		self.f.set(PSW::S, (tmp & 0x80) != 0);
+		self.f.set(PSW::P, (((tmp & 0xff) as u8).count_ones() % 2) == 0);
+	    },
+	    "RLC" => {
+		self.f.set(PSW::C, ((self.a & 0x80) >> 7) != 0);
+		self.a = self.a << 1;
+		self.a = self.a | (self.f.contains(PSW::C) as u8);
+	    },
+	    "RRC" => {
+		self.f.set(PSW::C, (self.a & 1) != 0);
+		self.a = ((self.a & 1) << 7) | (self.a >> 1);
+	    },
+	    "RAL" => {
+		let tmp = self.f.contains(PSW::C) as u8;
+		self.f.set(PSW::C, ((self.a & 0x80) >> 7) != 0);
+		self.a = self.a << 1;
+		self.a = self.a | tmp;
+	    },
+	    "RAR" => {
+		let tmp = (self.f.contains(PSW::C) as u8) << 7;
+		self.f.set(PSW::C, (self.a & 1) != 0);
+		self.a = self.a >> 1;
+		self.a = self.a | tmp;
+	    },
+	    "CMA" => {
+		self.a = !self.a;
+	    },
+	    "CMC" => {
+		self.f.toggle(PSW::C);
+	    },
+	    "STC" => {
+		self.f.insert(PSW::C);
+	    },
 	    _ =>
 		todo!("Unimplemented instruction {}", instr.mnemonic),
 	};
