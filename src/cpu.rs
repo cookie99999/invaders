@@ -53,6 +53,26 @@ const INSTR_SET_INTEL: [Instruction; 256] = instr_set![
     {0x74, 1, 7, "MOV"}, {0x75, 1, 7, "MOV"}, {0x76, 1, 7, "HLT"}, {0x77, 1, 7, "MOV"},
     {0x78, 1, 5, "MOV"}, {0x79, 1, 5, "MOV"}, {0x7a, 1, 5, "MOV"}, {0x7b, 1, 5, "MOV"},
     {0x7c, 1, 5, "MOV"}, {0x7d, 1, 5, "MOV"}, {0x7e, 1, 7, "MOV"}, {0x7f, 1, 5, "MOV"},
+    {0x80, 1, 4, "ADD"}, {0x81, 1, 4, "ADD"}, {0x82, 1, 4, "ADD"}, {0x83, 1, 4, "ADD"},
+    {0x84, 1, 4, "ADD"}, {0x85, 1, 4, "ADD"}, {0x86, 1, 7, "ADD"}, {0x87, 1, 4, "ADD"},
+    {0x88, 1, 4, "ADC"}, {0x89, 1, 4, "ADC"}, {0x8a, 1, 4, "ADC"}, {0x8b, 1, 4, "ADC"},
+    {0x8c, 1, 4, "ADC"}, {0x8d, 1, 4, "ADC"}, {0x8e, 1, 7, "ADC"}, {0x8f, 1, 4, "ADC"},
+    {0x90, 1, 4, "SUB"}, {0x91, 1, 4, "SUB"}, {0x92, 1, 4, "SUB"}, {0x93, 1, 4, "SUB"},
+    {0x94, 1, 4, "SUB"}, {0x95, 1, 4, "SUB"}, {0x96, 1, 7, "SUB"}, {0x97, 1, 4, "SUB"},
+    {0x98, 1, 4, "SBB"}, {0x99, 1, 4, "SBB"}, {0x9a, 1, 4, "SBB"}, {0x9b, 1, 4, "SBB"},
+    {0x9c, 1, 4, "SBB"}, {0x9d, 1, 4, "SBB"}, {0x9e, 1, 7, "SBB"}, {0x9f, 1, 4, "SBB"},
+    {0xa0, 1, 4, "ANA"}, {0xa1, 1, 4, "ANA"}, {0xa2, 1, 4, "ANA"}, {0xa3, 1, 4, "ANA"},
+    {0xa4, 1, 4, "ANA"}, {0xa5, 1, 4, "ANA"}, {0xa6, 1, 7, "ANA"}, {0xa7, 1, 4, "ANA"},
+    {0xa8, 1, 4, "XRA"}, {0xa9, 1, 4, "XRA"}, {0xaa, 1, 4, "XRA"}, {0xab, 1, 4, "XRA"},
+    {0xac, 1, 4, "XRA"}, {0xad, 1, 4, "XRA"}, {0xae, 1, 7, "XRA"}, {0xaf, 1, 4, "XRA"},
+    {0xb0, 1, 4, "ORA"}, {0xb1, 1, 4, "ORA"}, {0xb2, 1, 4, "ORA"}, {0xb3, 1, 4, "ORA"},
+    {0xb4, 1, 4, "ORA"}, {0xb5, 1, 4, "ORA"}, {0xb6, 1, 7, "ORA"}, {0xb7, 1, 4, "ORA"},
+    {0xb8, 1, 4, "CMP"}, {0xb9, 1, 4, "CMP"}, {0xba, 1, 4, "CMP"}, {0xbb, 1, 4, "CMP"},
+    {0xbc, 1, 4, "CMP"}, {0xbd, 1, 4, "CMP"}, {0xbe, 1, 7, "CMP"}, {0xbf, 1, 4, "CMP"},
+    {0xc0, 1, 5, "RNZ"}, {0xc1, 1, 10, "POP"}, {0xc2, 3, 10, "JNZ"}, {0xc3, 3, 10, "JMP"},
+    {0xc4, 3, 11, "CNZ"}, {0xc5, 1, 11, "PUSH"}, {0xc6, 2, 7, "ADI"}, {0xc7, 1, 11, "RST"},
+    {0xc8, 1, 5, "RZ"}, {0xc9, 1, 10, "RET"}, {0xca, 3, 10, "JZ"}, {0xcb, 3, 10, "*JMP"},
+    {0xcc, 3, 11, "CZ"}, {0xcd, 3, 17, "CALL"}, {0xce, 2, 7, "ACI"}, {0xcf, 1, 11, "RST"},
 ];
 
 bitflags::bitflags! {
@@ -154,6 +174,21 @@ impl Cpu {
 		self.sp = data;
 	    },
 	};
+    }
+
+    fn push_word(&mut self, data: u16) {
+	let hi = ((data & 0xff00) >> 8) as u8;
+	let lo = (data & 0x00ff) as u8;
+	self.bus.write_byte(self.sp.wrapping_sub(1), hi);
+	self.bus.write_byte(self.sp.wrapping_sub(2), lo);
+	self.sp -= 2;
+    }
+
+    fn pop_word(&mut self) -> u16 {
+	let lo = self.bus.read_byte(self.sp);
+	let hi = self.bus.read_byte(self.sp.wrapping_add(1));
+	self.sp += 2;
+	((hi as u16) << 8) | (lo as u16)
     }
 
     pub fn step(&mut self) -> usize {
@@ -465,6 +500,98 @@ impl Cpu {
 	    },
 	    "STC" => {
 		self.f.insert(PSW::C);
+	    },
+	    "JMP" => {
+		self.pc = opw;
+	    },
+	    "JNZ" => {
+		if !self.f.contains(PSW::Z) {
+		    self.pc = opw;
+		}
+	    },
+	    "JZ" => {
+		if self.f.contains(PSW::Z) {
+		    self.pc = opw;
+		}
+	    },
+	    "JNC" => {
+		if !self.f.contains(PSW::C) {
+		    self.pc = opw;
+		}
+	    },
+	    "JC" => {
+		if self.f.contains(PSW::C) {
+		    self.pc = opw;
+		}
+	    },
+	    "JPO" => {
+		if !self.f.contains(PSW::P) {
+		    self.pc = opw;
+		}
+	    },
+	    "JPE" => {
+		if self.f.contains(PSW::P) {
+		    self.pc = opw;
+		}
+	    },
+	    "JP" => {
+		if !self.f.contains(PSW::S) {
+		    self.pc = opw;
+		}
+	    },
+	    "JM" => {
+		if self.f.contains(PSW::S) {
+		    self.pc = opw;
+		}
+	    },
+	    "CALL" => {
+		self.push_word(self.pc);
+		self.pc = opw;
+	    },
+	    "CNZ" | "CZ" | "CNC" | "CC" |
+	    "CPO" | "CPE" | "CP" | "CM" => {
+		let cond: bool = match c {
+		    0o0 => !self.f.contains(PSW::Z),
+		    1 => self.f.contains(PSW::Z),
+		    2 => !self.f.contains(PSW::C),
+		    3 => self.f.contains(PSW::C),
+		    4 => !self.f.contains(PSW::P),
+		    5 => self.f.contains(PSW::P),
+		    6 => !self.f.contains(PSW::S),
+		    _ => self.f.contains(PSW::S),
+		};
+		if cond {
+		    self.push_word(self.pc);
+		    self.pc = opw;
+		    self.cycles += 6;
+		}
+	    },
+	    "RET" => {
+		self.pc = self.pop_word();
+	    },
+	    "RNZ" | "RZ" | "RNC" | "RC" |
+	    "RPO" | "RPE" | "RP" | "RM" => {
+		let cond: bool = match c {
+		    0o0 => !self.f.contains(PSW::Z),
+		    1 => self.f.contains(PSW::Z),
+		    2 => !self.f.contains(PSW::C),
+		    3 => self.f.contains(PSW::C),
+		    4 => !self.f.contains(PSW::P),
+		    5 => self.f.contains(PSW::P),
+		    6 => !self.f.contains(PSW::S),
+		    _ => self.f.contains(PSW::S),
+		};
+		if cond {
+		    self.pc = self.pop_word();
+		    self.cycles += 6;
+		}
+	    },
+	    "RST" => {
+		self.push_word(self.pc);
+		self.pc = (n << 3) as u16;
+	    },
+	    "PCHL" => {
+		self.pc = hlptr;
 	    },
 	    _ =>
 		todo!("Unimplemented instruction {}", instr.mnemonic),
