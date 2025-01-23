@@ -33,6 +33,26 @@ const INSTR_SET_INTEL: [Instruction; 256] = instr_set![
     {0x24, 1, 5, "INR"}, {0x25, 1, 5, "DCR"}, {0x26, 2, 7, "MVI"}, {0x27, 1, 4, "DAA"},
     {0x28, 1, 4, "*NOP"}, {0x29, 1, 10, "DAD"}, {0x2a, 3, 16, "LHLD"}, {0x2b, 1, 5, "DCX"},
     {0x2c, 1, 5, "INR"}, {0x2d, 1, 5, "DCR"}, {0x2e, 2, 7, "MVI"}, {0x2f, 1, 4, "CMA"},
+    {0x30, 1, 4, "*NOP"}, {0x31, 3, 10, "LXI"}, {0x32, 3, 13, "STA"}, {0x33, 1, 5, "INX"},
+    {0x34, 1, 10, "INR"}, {0x35, 1, 10, "DCR"}, {0x36, 2, 10, "MVI"}, {0x37, 1, 4, "STC"},
+    {0x38, 1, 4, "*NOP"}, {0x39, 1, 10, "DAD"}, {0x3a, 3, 13, "LDA"}, {0x3b, 1, 5, "DCX"},
+    {0x3c, 1, 5, "INR"}, {0x3d, 1, 5, "DCR"}, {0x3e, 2, 7, "MVI"}, {0x3f, 1, 4, "CMC"},
+    {0x40, 1, 5, "MOV"}, {0x41, 1, 5, "MOV"}, {0x42, 1, 5, "MOV"}, {0x43, 1, 5, "MOV"},
+    {0x44, 1, 5, "MOV"}, {0x45, 1, 5, "MOV"}, {0x46, 1, 7, "MOV"}, {0x47, 1, 5, "MOV"},
+    {0x48, 1, 5, "MOV"}, {0x49, 1, 5, "MOV"}, {0x4a, 1, 5, "MOV"}, {0x4b, 1, 5, "MOV"},
+    {0x4c, 1, 5, "MOV"}, {0x4d, 1, 5, "MOV"}, {0x4e, 1, 7, "MOV"}, {0x4f, 1, 5, "MOV"},
+    {0x50, 1, 5, "MOV"}, {0x51, 1, 5, "MOV"}, {0x52, 1, 5, "MOV"}, {0x53, 1, 5, "MOV"},
+    {0x54, 1, 5, "MOV"}, {0x55, 1, 5, "MOV"}, {0x56, 1, 7, "MOV"}, {0x57, 1, 5, "MOV"},
+    {0x58, 1, 5, "MOV"}, {0x59, 1, 5, "MOV"}, {0x5a, 1, 5, "MOV"}, {0x5b, 1, 5, "MOV"},
+    {0x5c, 1, 5, "MOV"}, {0x5d, 1, 5, "MOV"}, {0x5e, 1, 7, "MOV"}, {0x5f, 1, 5, "MOV"},
+    {0x60, 1, 5, "MOV"}, {0x61, 1, 5, "MOV"}, {0x62, 1, 5, "MOV"}, {0x63, 1, 5, "MOV"},
+    {0x64, 1, 5, "MOV"}, {0x65, 1, 5, "MOV"}, {0x66, 1, 7, "MOV"}, {0x67, 1, 5, "MOV"},
+    {0x68, 1, 5, "MOV"}, {0x69, 1, 5, "MOV"}, {0x6a, 1, 5, "MOV"}, {0x6b, 1, 5, "MOV"},
+    {0x6c, 1, 5, "MOV"}, {0x6d, 1, 5, "MOV"}, {0x6e, 1, 7, "MOV"}, {0x6f, 1, 5, "MOV"},
+    {0x70, 1, 7, "MOV"}, {0x71, 1, 7, "MOV"}, {0x72, 1, 7, "MOV"}, {0x73, 1, 7, "MOV"},
+    {0x74, 1, 7, "MOV"}, {0x75, 1, 7, "MOV"}, {0x76, 1, 7, "HLT"}, {0x77, 1, 7, "MOV"},
+    {0x78, 1, 5, "MOV"}, {0x79, 1, 5, "MOV"}, {0x7a, 1, 5, "MOV"}, {0x7b, 1, 5, "MOV"},
+    {0x7c, 1, 5, "MOV"}, {0x7d, 1, 5, "MOV"}, {0x7e, 1, 7, "MOV"}, {0x7f, 1, 5, "MOV"},
 ];
 
 bitflags::bitflags! {
@@ -343,6 +363,60 @@ impl Cpu {
 		self.f.set(PSW::S, (tmp & 0x80) != 0);
 		self.f.set(PSW::P, (((tmp & 0xff) as u8).count_ones() % 2) == 0);
 		self.a = tmp as u8;
+	    },
+	    "ANA" => {
+		let tmp = self.a & s;
+		self.f.set(PSW::C, false);
+		self.f.set(PSW::A, ((self.a | s) & 0x08) != 0);
+		self.f.set(PSW::Z, tmp == 0);
+		self.f.set(PSW::S, (tmp & 0x80) != 0);
+		self.f.set(PSW::P, ((tmp & 0xff).count_ones() % 2) == 0);
+		self.a = tmp;
+	    },
+	    "ANI" => {
+		let tmp = self.a & op1;
+		self.f.set(PSW::C, false);
+		self.f.set(PSW::A, false);
+		self.f.set(PSW::Z, tmp == 0);
+		self.f.set(PSW::S, (tmp & 0x80) != 0);
+		self.f.set(PSW::P, ((tmp & 0xff).count_ones() % 2) == 0);
+		self.a = tmp;
+	    },
+	    "XRA" => {
+		let tmp = self.a ^ s;
+		self.f.set(PSW::C, false);
+		self.f.set(PSW::A, false);
+		self.f.set(PSW::Z, tmp == 0);
+		self.f.set(PSW::S, (tmp & 0x80) != 0);
+		self.f.set(PSW::P, ((tmp & 0xff).count_ones() % 2) == 0);
+		self.a = tmp;
+	    },
+	    "XRI" => {
+		let tmp = self.a ^ op1;
+		self.f.set(PSW::C, false);
+		self.f.set(PSW::A, false);
+		self.f.set(PSW::Z, tmp == 0);
+		self.f.set(PSW::S, (tmp & 0x80) != 0);
+		self.f.set(PSW::P, ((tmp & 0xff).count_ones() % 2) == 0);
+		self.a = tmp;
+	    },
+	    "ORA" => {
+		let tmp = self.a | s;
+		self.f.set(PSW::C, false);
+		self.f.set(PSW::A, false);
+		self.f.set(PSW::Z, tmp == 0);
+		self.f.set(PSW::S, (tmp & 0x80) != 0);
+		self.f.set(PSW::P, ((tmp & 0xff).count_ones() % 2) == 0);
+		self.a = tmp;
+	    },
+	    "ORI" => {
+		let tmp = self.a | op1;
+		self.f.set(PSW::C, false);
+		self.f.set(PSW::A, false);
+		self.f.set(PSW::Z, tmp == 0);
+		self.f.set(PSW::S, (tmp & 0x80) != 0);
+		self.f.set(PSW::P, ((tmp & 0xff).count_ones() % 2) == 0);
+		self.a = tmp;
 	    },
 	    _ =>
 		todo!("Unimplemented instruction {}", instr.mnemonic),
