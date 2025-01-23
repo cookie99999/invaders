@@ -222,8 +222,19 @@ impl Cpu {
 	    0b011 => &mut self.e,
 	    0b100 => &mut self.h,
 	    0b101 => &mut self.l,
-	    0b110 => todo!("s = mem"),
+	    0b110 => todo!("d = mem"),
 	    _ => &mut self.a,
+	};
+
+	let cond: bool = match c {
+	    0 => !self.f.contains(PSW::Z),
+	    1 => self.f.contains(PSW::Z),
+	    2 => !self.f.contains(PSW::C),
+	    3 => self.f.contains(PSW::C),
+	    4 => !self.f.contains(PSW::P),
+	    5 => self.f.contains(PSW::P),
+	    6 => !self.f.contains(PSW::S),
+	    _ => self.f.contains(PSW::S),
 	};
 
 	let op1 = self.bus.read_byte(self.pc + 1);
@@ -504,43 +515,9 @@ impl Cpu {
 	    "JMP" => {
 		self.pc = opw;
 	    },
-	    "JNZ" => {
-		if !self.f.contains(PSW::Z) {
-		    self.pc = opw;
-		}
-	    },
-	    "JZ" => {
-		if self.f.contains(PSW::Z) {
-		    self.pc = opw;
-		}
-	    },
-	    "JNC" => {
-		if !self.f.contains(PSW::C) {
-		    self.pc = opw;
-		}
-	    },
-	    "JC" => {
-		if self.f.contains(PSW::C) {
-		    self.pc = opw;
-		}
-	    },
-	    "JPO" => {
-		if !self.f.contains(PSW::P) {
-		    self.pc = opw;
-		}
-	    },
-	    "JPE" => {
-		if self.f.contains(PSW::P) {
-		    self.pc = opw;
-		}
-	    },
-	    "JP" => {
-		if !self.f.contains(PSW::S) {
-		    self.pc = opw;
-		}
-	    },
-	    "JM" => {
-		if self.f.contains(PSW::S) {
+	    "JNZ" | "JZ" | "JNC" | "JC" |
+	    "JPO" | "JPE" | "JP" | "JM" => {
+		if cond {
 		    self.pc = opw;
 		}
 	    },
@@ -550,16 +527,6 @@ impl Cpu {
 	    },
 	    "CNZ" | "CZ" | "CNC" | "CC" |
 	    "CPO" | "CPE" | "CP" | "CM" => {
-		let cond: bool = match c {
-		    0o0 => !self.f.contains(PSW::Z),
-		    1 => self.f.contains(PSW::Z),
-		    2 => !self.f.contains(PSW::C),
-		    3 => self.f.contains(PSW::C),
-		    4 => !self.f.contains(PSW::P),
-		    5 => self.f.contains(PSW::P),
-		    6 => !self.f.contains(PSW::S),
-		    _ => self.f.contains(PSW::S),
-		};
 		if cond {
 		    self.push_word(self.pc);
 		    self.pc = opw;
@@ -571,16 +538,6 @@ impl Cpu {
 	    },
 	    "RNZ" | "RZ" | "RNC" | "RC" |
 	    "RPO" | "RPE" | "RP" | "RM" => {
-		let cond: bool = match c {
-		    0o0 => !self.f.contains(PSW::Z),
-		    1 => self.f.contains(PSW::Z),
-		    2 => !self.f.contains(PSW::C),
-		    3 => self.f.contains(PSW::C),
-		    4 => !self.f.contains(PSW::P),
-		    5 => self.f.contains(PSW::P),
-		    6 => !self.f.contains(PSW::S),
-		    _ => self.f.contains(PSW::S),
-		};
 		if cond {
 		    self.pc = self.pop_word();
 		    self.cycles += 6;
