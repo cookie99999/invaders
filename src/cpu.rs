@@ -228,11 +228,11 @@ impl Cpu {
 	//todo: decode extended opcodes
 	let instr: &Instruction = &self.instr_set[opcode as usize];
 	self.cycles += instr.cycles as usize;
-	let d = (opcode >> 3) & 7;
+	let d_bits = (opcode >> 3) & 7;
 	let s = opcode & 7;
 	let rp = (opcode >> 4) & 3;
-	let c = d;
-	let n = d;
+	let c = d_bits;
+	let n = d_bits;
 	let hlptr = self.read_rp(2);
 
 	let s = match s {
@@ -246,14 +246,14 @@ impl Cpu {
 	    _ => self.a,
 	};
 
-	let d: &mut u8 = match d {
+	let d: &mut u8 = match d_bits {
 	    0b000 => &mut self.b,
 	    0b001 => &mut self.c,
 	    0b010 => &mut self.d,
 	    0b011 => &mut self.e,
 	    0b100 => &mut self.h,
 	    0b101 => &mut self.l,
-	    0b110 => todo!("d = mem"),
+	    //0b110 => todo!("d = mem"),
 	    _ => &mut self.a,
 	};
 
@@ -278,10 +278,18 @@ impl Cpu {
 	
 	match instr.mnemonic {
 	    "MOV" => {
-		*d = s;
+		if d_bits == 6 {
+		    self.bus.write_byte(hlptr, s);
+		} else {
+		    *d = s;
+		}
 	    },
 	    "MVI" => {
-		*d = op1;
+		if d_bits == 6 {
+		    self.bus.write_byte(hlptr, op1);
+		} else {
+		    *d = op1;
+		}
 	    },
 	    "LXI" => {
 		self.write_rp(rp, opw);
@@ -397,20 +405,34 @@ impl Cpu {
 		self.a = tmp as u8;
 	    },
 	    "INR" => {
-		let tmp = d.wrapping_add(1) as u16;
+		let mut tmp = d.wrapping_add(1) as u16;
+		if d_bits == 6 {
+		    tmp = self.bus.read_byte(hlptr).wrapping_add(1) as u16;
+		}
 		self.f.set(PSW::Z, tmp == 0);
 		self.f.set(PSW::S, (tmp & 0x80) != 0);
 		self.f.set(PSW::P, (((tmp & 0xff) as u8).count_ones() % 2) == 0);
 		self.f.set(PSW::A, ((*d & 0x0f).wrapping_add(1)) > 0x0f);
-		*d = tmp as u8;
+		if d_bits == 6 {
+		    self.bus.write_byte(hlptr, tmp as u8);
+		} else {
+		    *d = tmp as u8;
+		}
 	    },
 	    "DCR" => {
-		let tmp = d.wrapping_sub(1) as u16;
+		let mut tmp = d.wrapping_sub(1) as u16;
+		if d_bits == 6 {
+		    tmp = self.bus.read_byte(hlptr).wrapping_sub(1) as u16;
+		}
 		self.f.set(PSW::Z, tmp == 0);
 		self.f.set(PSW::S, (tmp & 0x80) != 0);
 		self.f.set(PSW::P, (((tmp & 0xff) as u8).count_ones() % 2) == 0);
 		self.f.set(PSW::A, (*d & 0x0f) != 0);
-		*d = tmp as u8;
+		if d_bits == 6 {
+		    self.bus.write_byte(hlptr, tmp as u8);
+		} else {
+		    *d = tmp as u8;
+		}
 	    },
 	    "INX" => {
 		let tmp = self.read_rp(rp);

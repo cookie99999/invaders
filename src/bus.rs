@@ -66,7 +66,7 @@ impl Bus for CpmBus {
 	    0xaa => {
 		print!("{}", data as char);
 	    },
-	    0xff => println!("warm booted"),
+	    0xff => panic!("warm booted"),
 	    _ =>
 		todo!("unhandled io port write {port:02x}"),
 	};
