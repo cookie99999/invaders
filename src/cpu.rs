@@ -480,7 +480,9 @@ impl Cpu {
 		if ((tmp & 0x0f) > 0x09) || self.f.contains(PSW::A) {
 		    self.f.set(PSW::A, (((tmp & 0x0f) + 0x06) & 0xf0) != 0);
 		    tmp += 6;
-		    self.f.set(PSW::C, (tmp & 0xff00) != 0);
+		    if (tmp & 0xff00) != 0 {
+			self.f.insert(PSW::C);
+		    }
 		}
 		if ((tmp & 0xf0) > 0x90) || self.f.contains(PSW::C) {
 		    tmp += 0x60;
