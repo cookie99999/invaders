@@ -64,7 +64,7 @@ impl Bus for CpmBus {
     fn write_io_byte(&mut self, port: u8, data: u8) {
 	match port {
 	    0xaa => {
-		print!("{data}");
+		print!("{}", data as char);
 	    },
 	    0xff => println!("warm booted"),
 	    _ =>

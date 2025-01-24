@@ -12,6 +12,7 @@ fn main() {
     cpu.bus.load_bin(0, &stub_buf);
     cpu.bus.load_bin(0x100, &buf);
     cpu.reset();
+    cpu.pc = 0x100;
     'running: loop {
 	if cpu.step() == 0 {
 	    break 'running;
