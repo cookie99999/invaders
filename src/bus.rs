@@ -12,6 +12,7 @@ pub trait Bus {
     fn write_word(&mut self, addr: u16, data: u16);
     fn read_io_byte(&mut self, port: u8) -> u8;
     fn write_io_byte(&mut self, port: u8, data: u8);
+    fn load_bin(&mut self, offs: usize, buf: &[u8]);
 }
 
 pub struct InvBus {
@@ -28,6 +29,54 @@ pub struct InvBus {
     sound2: u8,
     watchdog: u8,
     shift_reg: u16,
+}
+
+pub struct CpmBus {
+    ram: [u8; 0x10000],
+}
+
+impl Bus for CpmBus {
+    fn read_byte(&mut self, addr: u16) -> u8 {
+	self.ram[addr as usize]
+    }
+
+    fn read_word(&mut self, addr: u16) -> u16 {
+	let result: u16 = self.read_byte(addr) as u16 | ((self.read_byte(addr + 1) as u16) << 8);
+	result
+    }
+
+    fn write_byte(&mut self, addr: u16, data: u8) {
+	self.ram[addr as usize] = data;
+    }
+
+    fn write_word(&mut self, addr: u16, data: u16) {
+	self.write_byte(addr, (data >> 8) as u8);
+	self.write_byte(addr + 1, (data & 0x00ff) as u8);
+    }
+
+    fn read_io_byte(&mut self, port: u8) -> u8 {
+	match port {
+	    _ =>
+		todo!("unhandled io port read {port:02x}"),
+	}
+    }
+
+    fn write_io_byte(&mut self, port: u8, data: u8) {
+	match port {
+	    0xaa => {
+		print!("{data}");
+	    },
+	    0xff => println!("warm booted"),
+	    _ =>
+		todo!("unhandled io port write {port:02x}"),
+	};
+    }
+
+    fn load_bin(&mut self, offs: usize, buf: &[u8]) {
+	for i in 0..buf.len() {
+	    self.ram[offs + i] = buf[i];
+	}
+    }
 }
 
 impl Bus for InvBus {
@@ -80,6 +129,12 @@ impl Bus for InvBus {
 		todo!("unhandled io port write {port:02x}"),
 	};
     }
+
+    fn load_bin(&mut self, offs: usize, buf: &[u8]) {
+	for i in 0..buf.len() {
+	    self.write_byte(offs as u16 + i as u16, buf[i]);
+	}
+    }
 }
 
 impl InvBus {
@@ -98,6 +153,14 @@ impl InvBus {
 	    sound2: 0,
 	    watchdog: 0,
 	    shift_reg: 0,
+	}
+    }
+}
+
+impl CpmBus {
+    pub fn new() -> Self {
+	CpmBus {
+	    ram: [0; 0x10000],
 	}
     }
 }

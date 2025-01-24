@@ -119,14 +119,15 @@ pub struct Cpu {
     pc: u16,
     f: PSW,
     ime: bool,
-    bus: Box<dyn bus::Bus>,
+    pub bus: Box<dyn bus::Bus>,
     instr_set: &'static [Instruction; 256],
     cycles: usize,
 }
 
 impl Cpu {
-    pub fn new() -> Self {
-	Cpu {
+    pub fn new(cpm: bool) -> Self {
+	if cpm {
+	    Cpu {
 	    a: 0,
 	    b: 0,
 	    c: 0,
@@ -138,9 +139,27 @@ impl Cpu {
 	    pc: 0,
 	    f: PSW::F1,
 	    ime: false,
-	    bus: Box::new(bus::InvBus::new()),
+	    bus: Box::new(bus::CpmBus::new()),
 	    instr_set: &INSTR_SET_INTEL,
 	    cycles: 0,
+	    }
+	} else {
+	    Cpu {
+		a: 0,
+		b: 0,
+		c: 0,
+		d: 0,
+		e: 0,
+		h: 0,
+		l: 0,
+		sp: 0,
+		pc: 0,
+		f: PSW::F1,
+		ime: false,
+		bus: Box::new(bus::InvBus::new()),
+		instr_set: &INSTR_SET_INTEL,
+		cycles: 0,
+	    }
 	}
     }
 
