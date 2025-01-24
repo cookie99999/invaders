@@ -73,6 +73,18 @@ const INSTR_SET_INTEL: [Instruction; 256] = instr_set![
     {0xc4, 3, 11, "CNZ"}, {0xc5, 1, 11, "PUSH"}, {0xc6, 2, 7, "ADI"}, {0xc7, 1, 11, "RST"},
     {0xc8, 1, 5, "RZ"}, {0xc9, 1, 10, "RET"}, {0xca, 3, 10, "JZ"}, {0xcb, 3, 10, "*JMP"},
     {0xcc, 3, 11, "CZ"}, {0xcd, 3, 17, "CALL"}, {0xce, 2, 7, "ACI"}, {0xcf, 1, 11, "RST"},
+    {0xd0, 1, 5, "RNC"}, {0xd1, 1, 10, "POP"}, {0xd2, 3, 10, "JNC"}, {0xd3, 2, 10, "OUT"},
+    {0xd4, 3, 11, "CNC"}, {0xd5, 1, 11, "PUSH"}, {0xd6, 2, 7, "SUI"}, {0xd7, 1, 11, "RST"},
+    {0xd8, 1, 5, "RC"}, {0xd9, 1, 10, "*RET"}, {0xda, 3, 10, "JC"}, {0xdb, 2, 10, "IN"},
+    {0xdc, 3, 11, "CC"}, {0xdd, 3, 17, "*CALL"}, {0xde, 2, 7, "SBI"}, {0xdf, 1, 11, "RST"},
+    {0xe0, 1, 5, "RPO"}, {0xe1, 1, 10, "POP"}, {0xe2, 3, 10, "JPO"}, {0xe3, 1, 18, "XTHL"},
+    {0xe4, 3, 11, "CPO"}, {0xe5, 1, 11, "PUSH"}, {0xe6, 2, 7, "ANI"}, {0xe7, 1, 11, "RST"},
+    {0xe8, 1, 5, "RPE"}, {0xe9, 1, 5, "PCHL"}, {0xea, 3, 10, "JPE"}, {0xeb, 1, 5, "XCHG"},
+    {0xec, 3, 11, "CPE"}, {0xed, 3, 17, "*CALL"}, {0xee, 2, 7, "XRI"}, {0xef, 1, 11, "RST"},
+    {0xf0, 1, 5, "RP"}, {0xf1, 1, 10, "POP"}, {0xf2, 3, 10, "JP"}, {0xf3, 1, 4, "DI"},
+    {0xf4, 3, 11, "CP"}, {0xf5, 1, 11, "PUSH"}, {0xf6, 2, 7, "ORI"}, {0xf7, 1, 11, "RST"},
+    {0xf8, 1, 5, "RM"}, {0xf9, 1, 5, "SPHL"}, {0xfa, 3, 10, "JM"}, {0xfb, 1, 4, "EI"},
+    {0xfc, 3, 11, "CM"}, {0xfd, 3, 17, "*CALL"}, {0xfe, 2, 7, "CPI"}, {0xff, 1, 11, "RST"},
 ];
 
 bitflags::bitflags! {
