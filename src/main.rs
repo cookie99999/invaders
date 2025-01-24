@@ -2,9 +2,12 @@ mod cpu;
 mod bus;
 
 use std::env;
+use std::io;
+use std::io::prelude::*;
 
 fn main() {
     let mut cpu = cpu::Cpu::new(true);
+    let mut stdin = io::stdin();
 
     let path = env::args().nth(1).expect("Usage: invaders <path>");
     let buf: Vec<u8> = std::fs::read(path).unwrap();
@@ -14,8 +17,9 @@ fn main() {
     cpu.reset();
     cpu.pc = 0x100;
     'running: loop {
-	if cpu.step() == 0 {
+	if cpu.step() == 0 || cpu.pc == 0 {
 	    break 'running;
 	}
+	//let _ = stdin.read(&mut [0u8]).unwrap();
     }
 }

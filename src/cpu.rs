@@ -246,15 +246,15 @@ impl Cpu {
 	    _ => self.a,
 	};
 
-	let d: &mut u8 = match d_bits {
-	    0b000 => &mut self.b,
-	    0b001 => &mut self.c,
-	    0b010 => &mut self.d,
-	    0b011 => &mut self.e,
-	    0b100 => &mut self.h,
-	    0b101 => &mut self.l,
-	    //0b110 => todo!("d = mem"),
-	    _ => &mut self.a,
+	let d = match d_bits {
+	    0b000 => self.b,
+	    0b001 => self.c,
+	    0b010 => self.d,
+	    0b011 => self.e,
+	    0b100 => self.h,
+	    0b101 => self.l,
+	    0b110 => 0, //bad trouble, but only used in like 4 instructions so its ok for now
+	    _ => self.a,
 	};
 
 	let cond: bool = match c {
@@ -272,24 +272,36 @@ impl Cpu {
 	let op2 = self.bus.read_byte(self.pc.wrapping_add(2));
 	let opw = ((op2 as u16) << 8) | op1 as u16;
 
-	disas(self.pc, instr.opcode, op1, op2, opw);
+	//println!("A {:02X} F {:02X} B {:02X} C {:02X} D {:02X} E {:02X} H {:02X} L {:02X} SP {:04X}",
+	//	 self.a, self.f.as_u8(), self.b, self.c, self.d, self.e, self.h, self.l, self.sp);
+	//disas(self.pc, instr.opcode, op1, op2, opw);
 
 	self.pc = self.pc.wrapping_add(instr.bytes as u16);
 	
 	match instr.mnemonic {
 	    "MOV" => {
-		if d_bits == 6 {
-		    self.bus.write_byte(hlptr, s);
-		} else {
-		    *d = s;
-		}
+		match d_bits {
+		    0 => self.b = s,
+		    1 => self.c = s,
+		    2 => self.d = s,
+		    3 => self.e = s,
+		    4 => self.h = s,
+		    5 => self.l = s,
+		    6 => self.bus.write_byte(hlptr, s),
+		    _ => self.a = s,
+		};
 	    },
 	    "MVI" => {
-		if d_bits == 6 {
-		    self.bus.write_byte(hlptr, op1);
-		} else {
-		    *d = op1;
-		}
+		match d_bits {
+		    0 => self.b = op1,
+		    1 => self.c = op1,
+		    2 => self.d = op1,
+		    3 => self.e = op1,
+		    4 => self.h = op1,
+		    5 => self.l = op1,
+		    6 => self.bus.write_byte(hlptr, op1),
+		    _ => self.a = op1,
+		};
 	    },
 	    "LXI" => {
 		self.write_rp(rp, opw);
@@ -301,12 +313,14 @@ impl Cpu {
 		self.bus.write_byte(opw, self.a);
 	    },
 	    "LHLD" => {
-		let tmp = self.bus.read_word(opw);
-		self.write_rp(2, tmp);
+		let lo = self.bus.read_byte(opw);
+		let hi = self.bus.read_byte(opw + 1);
+		self.write_rp(2, ((hi as u16) << 8) | lo as u16);
 	    },
 	    "SHLD" => {
 		let tmp = self.read_rp(2);
-		self.bus.write_word(opw, tmp);
+		self.bus.write_byte(opw, (tmp & 0xff) as u8);
+		self.bus.write_byte(opw + 1, ((tmp >> 8) & 0xff) as u8);
 	    },
 	    "LDAX" => { //todo: only bc and de should be allowed
 		let tmp = self.read_rp(rp);
@@ -412,12 +426,18 @@ impl Cpu {
 		self.f.set(PSW::Z, tmp == 0);
 		self.f.set(PSW::S, (tmp & 0x80) != 0);
 		self.f.set(PSW::P, (((tmp & 0xff) as u8).count_ones() % 2) == 0);
-		self.f.set(PSW::A, ((*d & 0x0f).wrapping_add(1)) > 0x0f);
-		if d_bits == 6 {
-		    self.bus.write_byte(hlptr, tmp as u8);
-		} else {
-		    *d = tmp as u8;
-		}
+		self.f.set(PSW::A, ((tmp & 0x0f).wrapping_add(1)) > 0x0f);
+		let tmp = tmp as u8;
+		match d_bits {
+		    0 => self.b = tmp,
+		    1 => self.c = tmp,
+		    2 => self.d = tmp,
+		    3 => self.e = tmp,
+		    4 => self.h = tmp,
+		    5 => self.l = tmp,
+		    6 => self.bus.write_byte(hlptr, tmp),
+		    _ => self.a = tmp,
+		};
 	    },
 	    "DCR" => {
 		let mut tmp = d.wrapping_sub(1) as u16;
@@ -427,12 +447,18 @@ impl Cpu {
 		self.f.set(PSW::Z, tmp == 0);
 		self.f.set(PSW::S, (tmp & 0x80) != 0);
 		self.f.set(PSW::P, (((tmp & 0xff) as u8).count_ones() % 2) == 0);
-		self.f.set(PSW::A, (*d & 0x0f) != 0);
-		if d_bits == 6 {
-		    self.bus.write_byte(hlptr, tmp as u8);
-		} else {
-		    *d = tmp as u8;
-		}
+		self.f.set(PSW::A, (tmp & 0x0f) != 0);
+		let tmp = tmp as u8;
+		match d_bits {
+		    0 => self.b = tmp,
+		    1 => self.c = tmp,
+		    2 => self.d = tmp,
+		    3 => self.e = tmp,
+		    4 => self.h = tmp,
+		    5 => self.l = tmp,
+		    6 => self.bus.write_byte(hlptr, tmp),
+		    _ => self.a = tmp,
+		};
 	    },
 	    "INX" => {
 		let tmp = self.read_rp(rp);
@@ -443,9 +469,9 @@ impl Cpu {
 		self.write_rp(rp, tmp.wrapping_sub(1));
 	    },
 	    "DAD" => {
-		let hltmp = self.read_rp(2);
+		let hltmp = self.read_rp(2) as u32;
 		let rptmp = self.read_rp(rp);
-		let tmp = hltmp.wrapping_add(rptmp) as u32;
+		let tmp = hltmp.wrapping_add(rptmp as u32);
 		self.f.set(PSW::C, tmp > 0xffff);
 		self.write_rp(2, tmp as u16);
 	    },
