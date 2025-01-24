@@ -124,7 +124,7 @@ impl Cpu {
 	    l: 0,
 	    sp: 0,
 	    pc: 0,
-	    f: PSW::from_bits(0).unwrap(),
+	    f: PSW::F1,
 	    ime: false,
 	    bus: Box::new(bus::InvBus::new()),
 	    instr_set: &INSTR_SET_INTEL,
@@ -512,7 +512,7 @@ impl Cpu {
 	    "STC" => {
 		self.f.insert(PSW::C);
 	    },
-	    "JMP" => {
+	    "JMP" | "*JMP" => {
 		self.pc = opw;
 	    },
 	    "JNZ" | "JZ" | "JNC" | "JC" |
@@ -549,6 +549,49 @@ impl Cpu {
 	    },
 	    "PCHL" => {
 		self.pc = hlptr;
+	    },
+	    "PUSH" => {
+		let mut tmp = self.read_rp(rp);
+		if rp == 3 {
+		    tmp = ((self.a as u16) << 8) | (self.f.as_u8() as u16);
+		}
+		self.push_word(tmp);
+	    },
+	    "POP" => {
+		let tmp = self.pop_word();
+		if rp != 3 {
+		    self.write_rp(rp, tmp);
+		} else {
+		    self.a = ((tmp & 0xff00) >> 8) as u8;
+		    self.f = PSW::from_bits((tmp & 0x00ff) as u8).unwrap();
+		}
+	    },
+	    "XTHL" => {
+		let tmp = self.pop_word();
+		let hl = self.read_rp(2);
+		self.push_word(hl);
+		self.write_rp(2, tmp);
+	    },
+	    "SPHL" => {
+		self.sp = self.read_rp(2);
+	    },
+	    "IN" => {
+		self.a = self.bus.read_io_byte(op1);
+	    },
+	    "OUT" => {
+		self.bus.write_io_byte(op1, self.a);
+	    },
+	    "EI" => {
+		self.ime = true;
+	    },
+	    "DI" => {
+		self.ime = false;
+	    },
+	    "HLT" => { //todo use actual behavior
+		return 0;
+	    },
+	    "NOP" | "*NOP" => {
+		//nothing
 	    },
 	    _ =>
 		todo!("Unimplemented instruction {}", instr.mnemonic),
