@@ -272,9 +272,9 @@ impl Cpu {
 	let op2 = self.bus.read_byte(self.pc.wrapping_add(2));
 	let opw = ((op2 as u16) << 8) | op1 as u16;
 
-	//println!("A {:02X} F {:02X} B {:02X} C {:02X} D {:02X} E {:02X} H {:02X} L {:02X} SP {:04X}",
-	//	 self.a, self.f.as_u8(), self.b, self.c, self.d, self.e, self.h, self.l, self.sp);
-	//disas(self.pc, instr.opcode, op1, op2, opw);
+	println!("A {:02X} F {:02X} B {:02X} C {:02X} D {:02X} E {:02X} H {:02X} L {:02X} SP {:04X}, CYC: {}",
+		 self.a, self.f.as_u8(), self.b, self.c, self.d, self.e, self.h, self.l, self.sp, self.cycles);
+	disas(self.pc, instr.opcode, op1, op2, opw);
 
 	self.pc = self.pc.wrapping_add(instr.bytes as u16);
 	

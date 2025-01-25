@@ -153,9 +153,9 @@ bool eval_opcode(system_state* state) {
   unsigned char* opcode = &state->memory[state->pc];
   state->cyc += OPCODES_CYCLES[*opcode];
 #ifdef DEBUG
+  //printf("\tC=%d,A=%d,P=%d,S=%d,Z=%d\n", state->f.cy, state->f.ac, state->f.p, state->f.s, state->f.z);
+  printf("A %02X F %02X B %02X C %02X D %02X E %02X H %02X L %02X SP %04X, CYC: %d\n", state->a, state->f, state->b, state->c, state->d, state->e, state->h, state->l, state->sp, state->cyc);
   disas_opcode(state->memory, state->pc);
-  printf("\tC=%d,A=%d,P=%d,S=%d,Z=%d\n", state->f.cy, state->f.ac, state->f.p, state->f.s, state->f.z);
-  printf("\tA $%02x B $%02x C $%02x D $%02x E $%02x H $%02x L $%02x SP $%04x\n", state->a, state->b, state->c, state->d, state->e, state->h, state->l, state->sp);
 #endif
   state->pc++;
 

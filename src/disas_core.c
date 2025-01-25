@@ -5,7 +5,7 @@
 unsigned int disas_opcode(unsigned char* buffer, unsigned int pc) {
 	unsigned char* byte = &buffer[pc];
 	unsigned int opbytes = 1;
-	printf("%04x ", pc);
+	printf("%04X ", pc);
 	switch (*byte) {
 	case 0x00: printf("NOP"); break;
 	case 0x01: printf("LXI    B, $%02X%02X", byte[2], byte[1]); opbytes = 3; break;
