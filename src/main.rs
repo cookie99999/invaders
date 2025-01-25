@@ -12,7 +12,9 @@ fn main() {
     let path = env::args().nth(1).expect("Usage: invaders <path>");
     let buf: Vec<u8> = std::fs::read(path).unwrap();
     let stub_buf: Vec<u8> = std::fs::read("cpmstub.bin").unwrap();
-    cpu.bus.load_bin(0, &stub_buf);
+    cpu.bus.load_bin(0xdc00, &stub_buf);
+    cpu.bus.write_byte(5, 0xc3);
+    cpu.bus.write_word(6, 0x00dc); //jmp $dc00
     cpu.bus.load_bin(0x100, &buf);
     cpu.reset();
     cpu.pc = 0x100;
