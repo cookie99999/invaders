@@ -6,12 +6,14 @@
 //#include <stdatomic.h>
 
 struct flags {
-  uint8_t z : 1;
   uint8_t s : 1;
-  uint8_t p : 1;
-  uint8_t cy : 1;
+  uint8_t z : 1;
+  uint8_t f5 : 1;
   uint8_t ac : 1;
-  uint8_t pad : 3;
+  uint8_t f3 : 1;
+  uint8_t p : 1;
+  uint8_t f1 : 1;
+  uint8_t cy : 1;
 };
 
 typedef struct system_state {

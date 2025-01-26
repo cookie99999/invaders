@@ -9,7 +9,7 @@
 //Copyright (c) 2018 Nicolas Allemand
 
 static const uint8_t OPCODES_CYCLES[256] = {
-  //  0  1   2   3   4   5   6   7   8  9   A   B   C   D   E  F
+//  0  1   2   3   4   5   6   7   8  9   A   B   C   D   E  F
   4, 10, 7,  5,  5,  5,  7,  4,  4, 10, 7,  5,  5,  5,  7, 4,  // 0
   4, 10, 7,  5,  5,  5,  7,  4,  4, 10, 7,  5,  5,  5,  7, 4,  // 1
   4, 10, 16, 5,  5,  5,  7,  4,  4, 10, 16, 5,  5,  5,  7, 4,  // 2
@@ -24,9 +24,14 @@ static const uint8_t OPCODES_CYCLES[256] = {
   4, 4,  4,  4,  4,  4,  7,  4,  4, 4,  4,  4,  4,  4,  7, 4,  // B
   5, 10, 10, 10, 11, 11, 7,  11, 5, 10, 10, 10, 11, 17, 7, 11, // C
   5, 10, 10, 10, 11, 11, 7,  11, 5, 10, 10, 10, 11, 17, 7, 11, // D
-  5, 10, 10, 18, 11, 11, 7,  11, 5, 5,  10, 4,  11, 17, 7, 11, // E
+  5, 10, 10, 18, 11, 11, 7,  11, 5, 5,  10, 5,  11, 17, 7, 11, // E
   5, 10, 10, 4,  11, 11, 7,  11, 5, 5,  10, 4,  11, 17, 7, 11  // F
 };
+
+static uint8_t f_as_u8(struct flags* f) {
+  uint8_t result = (f->s << 7) | (f->z << 6) | (f->ac << 4) | (f->p << 2) | 2 | f->cy;
+  return result;
+}
 
 static void unimplemented_instr(system_state* state) {
   printf("<ERROR> unimplemented instruction\n");
@@ -86,7 +91,7 @@ static void ret_jmp_call_rst(uint8_t* opcode, uint8_t low, uint8_t high, system_
       if (((opcode[2] << 8) | opcode[1]) == 0x00) {
 	printf("<DEBUG> cp/m warm reboot\n");
 	exit(EXIT_SUCCESS);
-      }
+	}
       state->pc = (uint16_t)(high << 8) | low;
     }
     else {
@@ -94,7 +99,7 @@ static void ret_jmp_call_rst(uint8_t* opcode, uint8_t low, uint8_t high, system_
     }
     break;
   case 2: //CALL
-    if (((opcode[2] << 8) | opcode[1]) == 0x0005) {
+    /*if (((opcode[2] << 8) | opcode[1]) == 0x0005) {
       if (state->c == 9) { //cp/m print routine
 	uint16_t offset = (uint16_t) (state->d << 8) | state->e;
 	char* str = (char*) &state->memory[offset];
@@ -109,7 +114,7 @@ static void ret_jmp_call_rst(uint8_t* opcode, uint8_t low, uint8_t high, system_
     } else if (((opcode[2] << 8) | opcode[1]) == 0) {
       state->pc += 2;
       exit(EXIT_SUCCESS);
-    } else {
+      } else*/ {
       if (conditions[cond_bits] || extra_bit) {
 	mem_write(state, (uint8_t)(ret >> 8) & 0xff, state->sp - 1);
 	mem_write(state, (uint8_t)ret & 0xff, state->sp - 2);
@@ -154,8 +159,8 @@ bool eval_opcode(system_state* state) {
   state->cyc += OPCODES_CYCLES[*opcode];
 #ifdef DEBUG
   //printf("\tC=%d,A=%d,P=%d,S=%d,Z=%d\n", state->f.cy, state->f.ac, state->f.p, state->f.s, state->f.z);
-  printf("A %02X F %02X B %02X C %02X D %02X E %02X H %02X L %02X SP %04X, CYC: %d\n", state->a, state->f, state->b, state->c, state->d, state->e, state->h, state->l, state->sp, state->cyc);
-  disas_opcode(state->memory, state->pc);
+  //printf("A %02X F %02X B %02X C %02X D %02X E %02X H %02X L %02X SP %04X, CYC: %ld\n", state->a, f_as_u8(&state->f), state->b, state->c, state->d, state->e, state->h, state->l, state->sp, state->cyc);
+  //disas_opcode(state->memory, state->pc);
 #endif
   state->pc++;
 
@@ -302,11 +307,7 @@ bool eval_opcode(system_state* state) {
   case 0xf5:
     //PUSH
     {
-      uint8_t flags = (uint8_t)((state->f.s != 0) << 7)		\
-	| ((state->f.z != 0) << 6) | 0 | \
-	((state->f.ac != 0) << 4) | 0 | \
-	((state->f.p != 0) << 2) | 0x02 | \
-	(state->f.cy != 0);
+      uint8_t flags = f_as_u8(&state->f);
       uint8_t* rp[4][2] = {
 	{&state->b, &state->c},
 	{&state->d, &state->e},
@@ -958,6 +959,12 @@ bool eval_opcode(system_state* state) {
     state->pc++; //2 byte instruction
     break;
   case 0xd3: //OUT
+    if (opcode[1] == 0xaa) {
+      printf("%c", state->a);
+    } else if (opcode[1] == 0xff) {
+      printf("warm booted\n");
+      exit(EXIT_SUCCESS);
+    }
     state->pc++; //2 byte instruction
     break;
   case 0x76: //HLT

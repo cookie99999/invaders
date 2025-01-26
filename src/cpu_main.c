@@ -11,7 +11,7 @@ static system_state* init_state() {
   system_state* state = calloc(1, sizeof(system_state));
 
   if (!state) {
-    printf("<ERROR> failed allocating %u bytes\n", sizeof(system_state));
+    printf("<ERROR> failed allocating %lu bytes\n", sizeof(system_state));
     exit(EXIT_FAILURE);
   }
 
@@ -21,6 +21,8 @@ static system_state* init_state() {
     printf("<ERROR> failed allocating %d bytes\n", MEMSIZE);
     exit(EXIT_FAILURE);
   }
+
+  state->f.f1 = 1;
 
   return state;
 }
@@ -57,6 +59,20 @@ int main(int argc, char** argv) {
       fread(&state->memory[0x100], fsize, 1, f);
       state->pc = 0x100;
       state->type = 1; //todo: switch to enum
+
+      FILE* stub = NULL;
+      stub = fopen("cpmstub.bin", "rb");
+      if (!stub) {
+	printf("<ERROR> could not open cpmstub.bin\n");
+	exit(EXIT_FAILURE);
+      }
+      fseek(stub, 0L, SEEK_END);
+      unsigned long stubsz = (unsigned long)ftell(stub);
+      fseek(stub, 0L, SEEK_SET);
+      fread(&state->memory[0xdc00], stubsz, 1, stub);
+      state->memory[5] = 0xc3;
+      state->memory[6] = 0x00;
+      state->memory[7] = 0xdc; //JMP 0xdc00
     }
   }
   else {
@@ -66,6 +82,7 @@ int main(int argc, char** argv) {
   
   while (!done) {
     done = eval_opcode(state);
+    //getchar();
   }
 
   del_state(state);
