@@ -253,7 +253,7 @@ impl Cpu {
 	    0b011 => self.e,
 	    0b100 => self.h,
 	    0b101 => self.l,
-	    0b110 => 0, //bad trouble, but only used in like 4 instructions so its ok for now
+	    0b110 => self.bus.read_byte(hlptr), //bad trouble, but only used in like 4 instructions so its ok for now
 	    _ => self.a,
 	};
 
@@ -272,9 +272,9 @@ impl Cpu {
 	let op2 = self.bus.read_byte(self.pc.wrapping_add(2));
 	let opw = ((op2 as u16) << 8) | op1 as u16;
 
-	println!("A {:02X} F {:02X} B {:02X} C {:02X} D {:02X} E {:02X} H {:02X} L {:02X} SP {:04X}, CYC: {}",
-		 self.a, self.f.as_u8(), self.b, self.c, self.d, self.e, self.h, self.l, self.sp, self.cycles);
-	disas(self.pc, instr.opcode, op1, op2, opw);
+	//println!("A {:02X} F {:02X} B {:02X} C {:02X} D {:02X} E {:02X} H {:02X} L {:02X} SP {:04X}, CYC: {}",
+	//	 self.a, self.f.as_u8(), self.b, self.c, self.d, self.e, self.h, self.l, self.sp, self.cycles);
+	//disas(self.pc, instr.opcode, op1, op2, opw);
 
 	self.pc = self.pc.wrapping_add(instr.bytes as u16);
 	
@@ -426,7 +426,7 @@ impl Cpu {
 		self.f.set(PSW::Z, tmp == 0);
 		self.f.set(PSW::S, (tmp & 0x80) != 0);
 		self.f.set(PSW::P, (((tmp & 0xff) as u8).count_ones() % 2) == 0);
-		self.f.set(PSW::A, ((tmp & 0x0f).wrapping_add(1)) > 0x0f);
+		self.f.set(PSW::A, ((d & 0x0f).wrapping_add(1)) > 0x0f);
 		let tmp = tmp as u8;
 		match d_bits {
 		    0 => self.b = tmp,
@@ -447,7 +447,7 @@ impl Cpu {
 		self.f.set(PSW::Z, tmp == 0);
 		self.f.set(PSW::S, (tmp & 0x80) != 0);
 		self.f.set(PSW::P, (((tmp & 0xff) as u8).count_ones() % 2) == 0);
-		self.f.set(PSW::A, (tmp & 0x0f) != 0);
+		self.f.set(PSW::A, (d & 0x0f) != 0);
 		let tmp = tmp as u8;
 		match d_bits {
 		    0 => self.b = tmp,
@@ -470,8 +470,8 @@ impl Cpu {
 	    },
 	    "DAD" => {
 		let hltmp = self.read_rp(2) as u32;
-		let rptmp = self.read_rp(rp);
-		let tmp = hltmp.wrapping_add(rptmp as u32);
+		let rptmp = self.read_rp(rp) as u32;
+		let tmp = hltmp + rptmp;
 		self.f.set(PSW::C, tmp > 0xffff);
 		self.write_rp(2, tmp as u16);
 	    },
@@ -505,7 +505,10 @@ impl Cpu {
 	    "ANI" => {
 		let tmp = self.a & op1;
 		self.f.set(PSW::C, false);
-		self.f.set(PSW::A, false);
+		//self.f.set(PSW::A, false); //1975 manual seems to be wrong about this
+		//according to the later 1979 mcs-80/85 manual ani has the same ac
+		//behavior as ana
+		self.f.set(PSW::A, ((self.a | op1) & 0x08) != 0);
 		self.f.set(PSW::Z, tmp == 0);
 		self.f.set(PSW::S, (tmp & 0x80) != 0);
 		self.f.set(PSW::P, ((tmp & 0xff).count_ones() % 2) == 0);
