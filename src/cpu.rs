@@ -137,7 +137,7 @@ impl Cpu {
 	    l: 0,
 	    sp: 0,
 	    pc: 0,
-	    f: PSW::F1,
+	    f: PSW::empty() | PSW::F1,
 	    ime: false,
 	    bus: Box::new(bus::CpmBus::new()),
 	    instr_set: &INSTR_SET_INTEL,
@@ -154,7 +154,7 @@ impl Cpu {
 		l: 0,
 		sp: 0,
 		pc: 0,
-		f: PSW::F1,
+		f: PSW::empty() | PSW::F1,
 		ime: false,
 		bus: Box::new(bus::InvBus::new()),
 		instr_set: &INSTR_SET_INTEL,
@@ -650,6 +650,9 @@ impl Cpu {
 		} else {
 		    self.a = ((tmp & 0xff00) >> 8) as u8;
 		    self.f = PSW::from_bits((tmp & 0x00ff) as u8).unwrap();
+		    self.f.insert(PSW::F1);
+		    self.f.remove(PSW::F5);
+		    self.f.remove(PSW::F3);
 		}
 	    },
 	    "XTHL" => {
