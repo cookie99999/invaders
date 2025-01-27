@@ -224,7 +224,12 @@ impl Cpu {
 
     pub fn step(&mut self) -> usize {
 	let oldcycles = self.cycles;
-	let opcode: u8 = self.bus.read_byte(self.pc);
+	let mut opcode: u8 = self.bus.read_byte(self.pc);
+	if self.bus.irq && self.ime {
+	    self.ime = false;
+	    self.bus.irq = false;
+	    opcode = self.bus.irq_vec;
+	}
 	//todo: decode extended opcodes
 	let instr: &Instruction = &self.instr_set[opcode as usize];
 	self.cycles += instr.cycles as usize;

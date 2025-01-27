@@ -19,16 +19,22 @@ pub struct InvBus {
     rom: [u8; 0x2000],
     ram: [u8; 0x400],
     pub vram: [u8; 0x1c00],
-    inp0: u8,
-    inp1: u8,
-    inp2: u8,
-    shift_in: u8,
+    cycles: usize,
     shift_amt: u8,
-    sound1: u8,
-    shift_data: u8,
-    sound2: u8,
     watchdog: u8,
     shift_reg: u16,
+    pub irq: bool,
+    pub irq_vec: u8,
+    pub credit: bool,
+    pub p1_start: bool,
+    pub p2_start: bool,
+    pub p1_fire: bool,
+    pub p2_fire: bool,
+    pub p1_left: bool,
+    pub p2_left: bool,
+    pub p1_right: bool,
+    pub p2_right: bool,
+    pub dip: u8,
 }
 
 pub struct CpmBus {
@@ -118,6 +124,23 @@ impl Bus for InvBus {
 
     fn read_io_byte(&mut self, port: u8) -> u8 {
 	match port {
+	    0 => ((self.dip >> 4) & 1) | 0b01110000,
+	    1 => {
+		((self.p1_right as u8) << 6) | ((self.p1_left as u8) << 5) |
+		((self.p1_fire as u8) << 4) | 8 | ((self.p1_start as u8) << 2) |
+		((self.p2_start as u8) << 1) | self.credit as u8
+	    },
+	    2 => {
+		(self.dip & 0x80) | ((self.p2_right as u8) << 6) |
+		((self.p2_left as u8) << 5) | ((self.p2_fire as u8) << 4) |
+		(((self.dip >> 6) & 1) << 3) | (((self.dip >> 5) & 1) << 1) |
+		((self.dip >> 3) & 1)
+	    },
+	    3 => ((self.shift_reg << self.shift_amt) >> 8) as u8,
+	    6 => {
+		println!("watchdog read");
+		0
+	    },
 	    _ =>
 		todo!("unhandled io port read {port:02x}"),
 	}
@@ -125,6 +148,14 @@ impl Bus for InvBus {
 
     fn write_io_byte(&mut self, port: u8, data: u8) {
 	match port {
+	    2 => self.shift_amt = data & 7,
+	    3 => println!("played sound 3.{data:08b}"),
+	    4 => {
+		let tmp = (self.shift_reg >> 8) & 0xff;
+		self.shift_reg = (data as u16) << 8 | tmp;
+	    },
+	    5 => println!("played sound 5.{data:08b}"),
+	    6 => println!("watchdog write"),
 	    _ =>
 		todo!("unhandled io port write {port:02x}"),
 	};
@@ -143,16 +174,38 @@ impl InvBus {
 	    rom: [0; 0x2000],
 	    ram: [0; 0x400],
 	    vram: [0; 0x1c00],
-	    inp0: 0,
-	    inp1: 0,
-	    inp2: 0,
-	    shift_in: 0,
+	    cycles: 0,
 	    shift_amt: 0,
-	    sound1: 0,
-	    shift_data: 0,
-	    sound2: 0,
 	    watchdog: 0,
 	    shift_reg: 0,
+	    irq: false,
+	    irq_vec: 0,
+	    credit: false,
+	    p1_start: false,
+	    p2_start: false,
+	    p1_fire: false,
+	    p2_fire: false,
+	    p1_left: false,
+	    p2_left: false,
+	    p1_right: false,
+	    p2_right: false,
+	    dip: 0,
+	}
+    }
+
+    pub fn step(&mut self, cyc: usize) {
+	//count the time until interrupts
+	self.cycles += cyc;
+	if self.cycles >= 16667 / 2 { //half frame
+	    self.irq = true;
+	    self.irq_vec = 0xcf; //RST 8
+	    self.cycles -= 16667 / 2;
+	}
+	
+	if self.cycles >= 16667 { //~1 frame
+	    self.irq = true;
+	    self.irq_vec = 0xd7; //RST 10
+	    self.cycles -= 16667;
 	}
     }
 }
