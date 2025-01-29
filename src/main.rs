@@ -69,6 +69,26 @@ fn main() {
 		Event::KeyDown { keycode: Some(Keycode::Escape), .. } => {
 		    break 'running;
 		},
+		Event::KeyDown { keycode: Some(kc), .. } => {
+		    match kc {
+			Keycode::LEFT => cpu.bus.p1_left = true,
+			Keycode::RIGHT => cpu.bus.p1_right = true,
+			Keycode::LCTRL => cpu.bus.p1_fire = true,
+			Keycode::C => cpu.bus.credit = true,
+			Keycode::RETURN => cpu.bus.p1_start = true,
+			_ => {},
+		    };
+		},
+		Event::KeyUp { keycode: Some(kc), .. } => {
+		    match kc {
+			Keycode::LEFT => cpu.bus.p1_left = false,
+			Keycode::RIGHT => cpu.bus.p1_right = false,
+			Keycode::LCTRL => cpu.bus.p1_fire = false,
+			Keycode::C => cpu.bus.credit = false,
+			Keycode::RETURN => cpu.bus.p1_start = false,
+			_ => {},
+		    };
+		},
 		_ => {},
 	    }
 	}
