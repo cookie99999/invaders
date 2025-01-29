@@ -122,6 +122,7 @@ pub struct Cpu {
     pub bus: bus::InvBus,
     instr_set: &'static [Instruction; 256],
     pub cycles: usize,
+    ei_pend: bool,
 }
 
 impl Cpu {
@@ -159,6 +160,7 @@ impl Cpu {
 	    bus: bus::InvBus::new(),
 	    instr_set: &INSTR_SET_INTEL,
 	    cycles: 0,
+	    ei_pend: false,
 	    }
 	//}
     }
@@ -230,6 +232,13 @@ impl Cpu {
 	    self.ime = false;
 	    self.bus.irq = false;
 	    opcode = self.bus.irq_vec;
+	}
+	if self.ei_pend {
+	    self.ime = true;
+	    self.ei_pend = false;
+	    //there will be no chance for interrupts until
+	    //after this instruction runs so we have effectively
+	    //gotten the one instruction delay specified in the manual
 	}
 	//todo: decode extended opcodes
 	let instr: &Instruction = &self.instr_set[opcode as usize];
@@ -679,7 +688,7 @@ impl Cpu {
 		self.bus.write_io_byte(op1, self.a);
 	    },
 	    "EI" => {
-		self.ime = true;
+		self.ei_pend = true;
 	    },
 	    "DI" => {
 		self.ime = false;
