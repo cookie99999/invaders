@@ -139,10 +139,7 @@ impl Bus for InvBus {
 		((self.dip >> 3) & 1)
 	    },
 	    3 => ((self.shift_reg << self.shift_amt) >> 8) as u8,
-	    6 => {
-		println!("watchdog read");
-		0
-	    },
+	    6 => 0, //watchdog timer
 	    _ =>
 		todo!("unhandled io port read {port:02x}"),
 	}
@@ -151,13 +148,16 @@ impl Bus for InvBus {
     fn write_io_byte(&mut self, port: u8, data: u8) {
 	match port {
 	    2 => self.shift_amt = data & 7,
-	    3 => println!("played sound 3.{data:08b}"),
+	    3 => println!("played sound 3.{data}"),
 	    4 => {
 		let tmp = (self.shift_reg >> 8) & 0xff;
 		self.shift_reg = (data as u16) << 8 | tmp;
 	    },
-	    5 => println!("played sound 5.{data:08b}"),
-	    6 => println!("watchdog write"),
+	    5 => println!("played sound 5.{data}"),
+	    6 => {}, //normally a watchdog access resets a timer, that if allowed to count down
+	    //would reset the hardware. this probably only happens from hardware failure
+	    //in the case of the real machine, or improper emulation/corrupt rom dump,
+	    //so it isnt necessary to emulate accurately
 	    _ =>
 		todo!("unhandled io port write {port:02x}"),
 	};
