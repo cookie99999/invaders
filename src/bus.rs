@@ -35,6 +35,8 @@ pub struct InvBus {
     pub p1_right: bool,
     pub p2_right: bool,
     pub dip: u8,
+    half: bool,
+    pub vblank: bool,
 }
 
 pub struct CpmBus {
@@ -95,7 +97,7 @@ impl Bus for InvBus {
 	    VRAM_START ..= VRAM_END =>
 		self.vram[(addr - VRAM_START) as usize],
 	    _ =>
-		self.ram[(addr % RAM_START) as usize],
+		self.ram[(addr % (RAM_END - RAM_START)) as usize],
 	}
     }
 
@@ -113,7 +115,7 @@ impl Bus for InvBus {
 	    VRAM_START ..= VRAM_END =>
 		self.vram[(addr - VRAM_START) as usize] = data,
 	    _ =>
-		self.ram[(addr % RAM_START) as usize] = data,
+		self.ram[(addr % (RAM_END - RAM_START)) as usize] = data,
 	};
     }
 
@@ -163,7 +165,7 @@ impl Bus for InvBus {
 
     fn load_bin(&mut self, offs: usize, buf: &[u8]) {
 	for i in 0..buf.len() {
-	    self.write_byte(offs as u16 + i as u16, buf[i]);
+	    self.rom[offs + i] = buf[i];
 	}
     }
 }
@@ -190,22 +192,27 @@ impl InvBus {
 	    p1_right: false,
 	    p2_right: false,
 	    dip: 0,
+	    half: true,
+	    vblank: false,
 	}
     }
 
     pub fn step(&mut self, cyc: usize) {
 	//count the time until interrupts
 	self.cycles += cyc;
-	if self.cycles >= 16667 / 2 { //half frame
+	if self.cycles >= 16667 / 2 && self.half { //half frame
 	    self.irq = true;
 	    self.irq_vec = 0xcf; //RST 8
 	    self.cycles -= 16667 / 2;
+	    self.half = false;
 	}
 	
 	if self.cycles >= 16667 { //~1 frame
 	    self.irq = true;
 	    self.irq_vec = 0xd7; //RST 10
 	    self.cycles -= 16667;
+	    self.half = true;
+	    self.vblank = true;
 	}
     }
 }

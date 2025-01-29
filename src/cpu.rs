@@ -118,15 +118,15 @@ pub struct Cpu {
     sp: u16,
     pub pc: u16,
     f: PSW,
-    ime: bool,
-    pub bus: Box<dyn bus::Bus>,
+    pub ime: bool,
+    pub bus: bus::InvBus,
     instr_set: &'static [Instruction; 256],
-    cycles: usize,
+    pub cycles: usize,
 }
 
 impl Cpu {
     pub fn new(cpm: bool) -> Self {
-	if cpm {
+	/*if cpm {
 	    Cpu {
 	    a: 0,
 	    b: 0,
@@ -139,28 +139,28 @@ impl Cpu {
 	    pc: 0,
 	    f: PSW::empty() | PSW::F1,
 	    ime: false,
-	    bus: Box::new(bus::CpmBus::new()),
+	    bus: bus::CpmBus::new(),
 	    instr_set: &INSTR_SET_INTEL,
 	    cycles: 0,
 	    }
-	} else {
-	    Cpu {
-		a: 0,
-		b: 0,
-		c: 0,
-		d: 0,
-		e: 0,
-		h: 0,
-		l: 0,
-		sp: 0,
-		pc: 0,
-		f: PSW::empty() | PSW::F1,
-		ime: false,
-		bus: Box::new(bus::InvBus::new()),
-		instr_set: &INSTR_SET_INTEL,
-		cycles: 0,
+	} else {*/
+	Cpu {
+	    a: 0,
+	    b: 0,
+	    c: 0,
+	    d: 0,
+	    e: 0,
+	    h: 0,
+	    l: 0,
+	    sp: 0,
+	    pc: 0,
+	    f: PSW::empty() | PSW::F1,
+	    ime: false,
+	    bus: bus::InvBus::new(),
+	    instr_set: &INSTR_SET_INTEL,
+	    cycles: 0,
 	    }
-	}
+	//}
     }
 
     pub fn reset(&mut self) {
@@ -226,6 +226,7 @@ impl Cpu {
 	let oldcycles = self.cycles;
 	let mut opcode: u8 = self.bus.read_byte(self.pc);
 	if self.bus.irq && self.ime {
+	    self.pc -= 1; //1 byte will be added later, want to ret back to interrupted instr
 	    self.ime = false;
 	    self.bus.irq = false;
 	    opcode = self.bus.irq_vec;
@@ -277,8 +278,8 @@ impl Cpu {
 	let op2 = self.bus.read_byte(self.pc.wrapping_add(2));
 	let opw = ((op2 as u16) << 8) | op1 as u16;
 
-	//println!("A {:02X} F {:02X} B {:02X} C {:02X} D {:02X} E {:02X} H {:02X} L {:02X} SP {:04X}, CYC: {}",
-	//	 self.a, self.f.as_u8(), self.b, self.c, self.d, self.e, self.h, self.l, self.sp, self.cycles);
+	//println!("A {:02X} F {:02X} B {:02X} C {:02X} D {:02X} E {:02X} H {:02X} L {:02X} SP {:04X}, CYC: {} ime {}",
+	//	 self.a, self.f.as_u8(), self.b, self.c, self.d, self.e, self.h, self.l, self.sp, self.cycles, self.ime);
 	//disas(self.pc, instr.opcode, op1, op2, opw);
 
 	self.pc = self.pc.wrapping_add(instr.bytes as u16);
