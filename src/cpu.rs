@@ -967,8 +967,9 @@ fn disas(pc: u16, opcode: u8, op1: u8, op2: u8, opw: u16) {
 	0xFE => println!("CPI    ${op1:02X}"),
 	0xFF => println!("RST    7"),
     };
+}
 
-    fn disas_zilog(pc: u16, opcode: u8, op1: u8, op2: u8, opw: u16) {
+fn disas_zilog(pc: u16, opcode: u8, op1: u8, op2: u8, opw: u16) {
     print!("{:04X} ", pc);
     match opcode {
 	0x00 => println!("NOP"),
@@ -1227,5 +1228,5 @@ fn disas(pc: u16, opcode: u8, op1: u8, op2: u8, opw: u16) {
 	0xFD => println!("*CALL ${opw:04X}"),
 	0xFE => println!("CP A, ${op1:02X}"),
 	0xFF => println!("RST $38"),
- };
+    };
 }

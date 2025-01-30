@@ -37,6 +37,7 @@ pub struct InvBus {
     pub dip: u8,
     half: bool,
     pub vblank: bool,
+    pub sfx: [bool; 10],
 }
 
 pub struct CpmBus {
@@ -148,12 +149,28 @@ impl Bus for InvBus {
     fn write_io_byte(&mut self, port: u8, data: u8) {
 	match port {
 	    2 => self.shift_amt = data & 7,
-	    3 => println!("played sound 3.{data}"),
+	    3 => {
+		let bits = data & 0xf;
+		for i in 0..4 {
+		    if (bits >> i) & 1 != 0 {
+			self.sfx[i] = true;
+			println!("playing sfx {i}");
+		    }
+		}
+	    },
 	    4 => {
 		let tmp = (self.shift_reg >> 8) & 0xff;
 		self.shift_reg = (data as u16) << 8 | tmp;
 	    },
-	    5 => println!("played sound 5.{data}"),
+	    5 => {
+		let bits = data & 0x1f;
+		for i in 0..5 {
+		    if (bits >> i) & 1 != 0 {
+			self.sfx[i + 4] = true;
+			println!("playing sfx {}", i + 4);
+		    }
+		}
+	    },
 	    6 => {}, //normally a watchdog access resets a timer, that if allowed to count down
 	    //would reset the hardware. this probably only happens from hardware failure
 	    //in the case of the real machine, or improper emulation/corrupt rom dump,
@@ -194,6 +211,7 @@ impl InvBus {
 	    dip: 0,
 	    half: true,
 	    vblank: false,
+	    sfx: [false; 10],
 	}
     }
 

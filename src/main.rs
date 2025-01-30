@@ -3,11 +3,14 @@ mod bus;
 
 use crate::bus::Bus;
 use std::env;
+use std::thread;
+use std::time;
 use std::io;
 use std::io::prelude::*;
 use sdl2::pixels::PixelFormatEnum;
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
+use sdl2::mixer::{InitFlag, AUDIO_S16LSB, DEFAULT_CHANNELS};
 
 fn draw(bus: &mut bus::InvBus, tex: &mut sdl2::render::Texture) {
     tex.with_lock(None, |buf: &mut [u8], pitch: usize| {
@@ -45,6 +48,23 @@ fn main() {
     //cpu.pc = 0x100;
 
     let context = sdl2::init().unwrap();
+    
+    let _audio = context.audio().unwrap();
+    sdl2::mixer::open_audio(44_100, AUDIO_S16LSB, DEFAULT_CHANNELS, 1024).unwrap();
+    let _mixer_context = sdl2::mixer::init(InitFlag::MP3 | InitFlag::FLAC | InitFlag::MOD | InitFlag::OGG)
+	.unwrap();
+    sdl2::mixer::allocate_channels(4);
+    let sfx_chunks: [sdl2::mixer::Chunk; 9] = [ sdl2::mixer::Chunk::from_file("sfx/0.wav").unwrap(),
+						sdl2::mixer::Chunk::from_file("sfx/1.wav").unwrap(),
+						sdl2::mixer::Chunk::from_file("sfx/3.wav").unwrap(),
+						sdl2::mixer::Chunk::from_file("sfx/4.wav").unwrap(),
+						sdl2::mixer::Chunk::from_file("sfx/5.wav").unwrap(),
+						sdl2::mixer::Chunk::from_file("sfx/6.wav").unwrap(),
+						sdl2::mixer::Chunk::from_file("sfx/7.wav").unwrap(),
+						sdl2::mixer::Chunk::from_file("sfx/8.wav").unwrap(),
+						sdl2::mixer::Chunk::from_file("sfx/9.wav").unwrap(),
+    ];
+    
     let mut event_pump = context.event_pump().unwrap();
     let video = context.video().unwrap();
     let width = 224;
@@ -61,8 +81,10 @@ fn main() {
 	.unwrap();
     canv.clear();
     canv.present();
-    
+
+    let cycle_time = time::Duration::from_nanos(600);
     'running: loop {
+	let now = time::Instant::now();
 	for e in event_pump.poll_iter() {
 	    match e {
 		Event::Quit {..} |
@@ -103,9 +125,20 @@ fn main() {
 	    cpu.bus.vblank = false;
 	    canv.copy(&tex, None, None).unwrap();
 	    canv.present();
+
+	    for i in 0..9 {
+		if cpu.bus.sfx[i] {
+		    sdl2::mixer::Channel::all().play(&sfx_chunks[i], 0).unwrap();
+		    cpu.bus.sfx[i] = false;
+		}
+	    }
 	}
 	//if cpu.cycles > 600000 {
 	//    let _ = stdin.read(&mut [0u8]).unwrap();
 	//}
+	let elapsed = now.elapsed();
+	if elapsed < cycle_time {
+	    thread::sleep(cycle_time - elapsed);
+	}
     }
 }
