@@ -152,10 +152,12 @@ impl Bus for InvBus {
 	    3 => {
 		let bits = data & 0xf;
 		for i in 0..4 {
-		    if (bits >> i) & 1 != 0 {
-			self.sfx[i] = true;
-			println!("playing sfx {i}");
-		    }
+		    self.sfx[i] = if (bits >> i) & 1 != 0 {
+			println!("playing sfx {}", i);
+			true
+		    } else {
+			false
+		    };
 		}
 	    },
 	    4 => {
@@ -165,10 +167,12 @@ impl Bus for InvBus {
 	    5 => {
 		let bits = data & 0x1f;
 		for i in 0..5 {
-		    if (bits >> i) & 1 != 0 {
-			self.sfx[i + 4] = true;
+		    self.sfx[i + 4] = if (bits >> i) & 1 != 0 {
 			println!("playing sfx {}", i + 4);
-		    }
+			true
+		    } else {
+			false
+		    };
 		}
 	    },
 	    6 => {}, //normally a watchdog access resets a timer, that if allowed to count down

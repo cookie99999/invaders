@@ -16,7 +16,7 @@ fn draw(bus: &mut bus::InvBus, tex: &mut sdl2::render::Texture) {
     tex.with_lock(None, |buf: &mut [u8], pitch: usize| {
 	for x in (0..256).step_by(8) {
 	    for y in 0..224 {
-		for (i, b) in (0..8).rev().enumerate() {
+		for b in (0..8).rev() {
 		    let bufx: usize = y;
 		    let bufy: usize = (-(x as i16 + b as i16) + 256 - 1) as usize;
 		    let buf_offs: usize = bufy * pitch + bufx;
@@ -82,7 +82,7 @@ fn main() {
     canv.clear();
     canv.present();
 
-    let cycle_time = time::Duration::from_nanos(600);
+    let cycle_time = time::Duration::from_nanos(50); //2mhz clock
     'running: loop {
 	let now = time::Instant::now();
 	for e in event_pump.poll_iter() {
@@ -133,12 +133,15 @@ fn main() {
 		}
 	    }
 	}
-	//if cpu.cycles > 600000 {
-	//    let _ = stdin.read(&mut [0u8]).unwrap();
-	//}
+	
+	//let _ = stdin.read(&mut [0u8]).unwrap();
 	let elapsed = now.elapsed();
-	if elapsed < cycle_time {
-	    thread::sleep(cycle_time - elapsed);
+	let target = cycle_time.saturating_mul(cyc as u32);
+	//println!("took {} target is {}",
+	//	 elapsed.as_nanos(),
+	//	 target.as_nanos());
+	if elapsed < target {
+	    thread::sleep(target.saturating_sub(elapsed));
 	}
     }
 }
