@@ -128,6 +128,7 @@ fn main() {
 
 	    for i in 0..9 {
 		if cpu.bus.sfx[i] {
+		    sdl2::mixer::Channel::all().halt();
 		    sdl2::mixer::Channel::all().play(&sfx_chunks[i], 0).unwrap();
 		    cpu.bus.sfx[i] = false;
 		}
