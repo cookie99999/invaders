@@ -42,6 +42,8 @@ pub struct InvBus {
 
 pub struct CpmBus {
     ram: [u8; 0x10000],
+    pub irq: bool,
+    pub irq_vec: u8,
 }
 
 impl Bus for CpmBus {
@@ -243,6 +245,8 @@ impl CpmBus {
     pub fn new() -> Self {
 	CpmBus {
 	    ram: [0; 0x10000],
+	    irq: false,
+	    irq_vec: 0,
 	}
     }
 }

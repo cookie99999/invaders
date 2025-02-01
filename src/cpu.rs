@@ -224,6 +224,115 @@ impl Cpu {
 	((hi as u16) << 8) | (lo as u16)
     }
 
+    fn movb(&mut self, d: u8, s: u8, hlptr: u16) {
+	match d {
+	    0 => self.b = s,
+	    1 => self.c = s,
+	    2 => self.d = s,
+	    3 => self.e = s,
+	    4 => self.h = s,
+	    5 => self.l = s,
+	    6 => self.bus.write_byte(hlptr, s),
+	    _ => self.a = s,
+	};
+    }
+
+    fn aluop(&mut self, op: u8, s: u8) {
+	let mut tmp = self.a as u16;
+	let cflag = self.f.contains(PSW::C) as u16;
+	match op {
+	    0 => { //ADD
+		tmp = tmp.wrapping_add(s as u16);
+		self.f.set(PSW::A, ((self.a & 0xf) + (s & 0xf)) > 0x0f);
+		self.f.set(PSW::C, tmp > 0xff);
+	    },
+	    1 => { //ADC
+		tmp = tmp.wrapping_add(s as u16).wrapping_add(cflag);
+		self.f.set(PSW::A, ((self.a & 0xf) + (s & 0xf) + cflag as u8) > 0x0f);
+		self.f.set(PSW::C, tmp > 0xff);
+	    },
+	    2 => { //SUB
+		tmp = tmp.wrapping_sub(s as u16);
+		self.f.set(PSW::A, ((self.a & 0xf) + ((!s & 0xff) & 0xf) + 1) > 0x0f);
+		self.f.set(PSW::C, tmp > 0xff);
+	    },
+	    3 => { //SBB
+		tmp = tmp.wrapping_sub(s as u16).wrapping_sub(cflag);
+		self.f.set(PSW::A, ((self.a & 0xf) + ((!s & 0xff) & 0xf) + ((!cflag as u8) & 1)) > 0x0f);
+		self.f.set(PSW::C, tmp > 0xff);
+	    },
+	    4 => { //ANA
+		tmp = (self.a & s) as u16;
+		self.f.set(PSW::C, false);
+		self.f.set(PSW::A, ((self.a | s) & 0x08) != 0);
+	    },
+	    5 => { //XRA
+		tmp = (self.a ^ s) as u16;
+		self.f.set(PSW::C, false);
+		self.f.set(PSW::A, false);
+	    },
+	    6 => { //ORA
+		tmp = (self.a | s) as u16;
+		self.f.set(PSW::C, false);
+		self.f.set(PSW::A, false);
+	    },
+	    _ => { //CMP
+		tmp = tmp.wrapping_sub(s as u16);
+		self.f.set(PSW::A, ((self.a & 0xf) + ((!s & 0xff) & 0xf) + 1) > 0x0f);
+		self.f.set(PSW::C, tmp > 0xff);
+	    },
+	};
+	self.f.set(PSW::Z, (tmp & 0xff) == 0);
+	self.f.set(PSW::S, (tmp & 0x80) != 0);
+	self.f.set(PSW::P, (((tmp & 0xff) as u8).count_ones() % 2) == 0);
+	if op != 7 { //CMP doesn't modify a
+	    self.a = tmp as u8;
+	}
+    }
+
+    fn branch(&mut self, op: u8, c: u8, uncond: u8, addr: u16) {
+	let c2 = if uncond != 0 {
+	    8
+	} else {
+	    c
+	};
+	let cond: bool = match c2 {
+	    0 => !self.f.contains(PSW::Z),
+	    1 => self.f.contains(PSW::Z),
+	    2 => !self.f.contains(PSW::C),
+	    3 => self.f.contains(PSW::C),
+	    4 => !self.f.contains(PSW::P),
+	    5 => self.f.contains(PSW::P),
+	    6 => !self.f.contains(PSW::S),
+	    7 => self.f.contains(PSW::S),
+	    _ => true,
+	};
+	match op {
+	    0 => { //RET
+		if cond {
+		    self.pc = self.pop_word();
+		    self.cycles += 6;
+		}
+	    },
+	    1 => { //JMP
+		if cond {
+		    self.pc = addr;
+		}
+	    },
+	    2 => { //CALL
+		if cond {
+		    self.push_word(self.pc);
+		    self.pc = addr;
+		    self.cycles += 6;
+		}
+	    },
+	    _ => { //RST
+		self.push_word(self.pc);
+		self.pc = (c << 3) as u16;
+	    },
+	};
+    }
+
     pub fn step(&mut self) -> usize {
 	let oldcycles = self.cycles;
 	let mut opcode: u8 = self.bus.read_byte(self.pc);
@@ -272,17 +381,6 @@ impl Cpu {
 	    _ => self.a,
 	};
 
-	let cond: bool = match c {
-	    0 => !self.f.contains(PSW::Z),
-	    1 => self.f.contains(PSW::Z),
-	    2 => !self.f.contains(PSW::C),
-	    3 => self.f.contains(PSW::C),
-	    4 => !self.f.contains(PSW::P),
-	    5 => self.f.contains(PSW::P),
-	    6 => !self.f.contains(PSW::S),
-	    _ => self.f.contains(PSW::S),
-	};
-
 	let op1 = self.bus.read_byte(self.pc.wrapping_add(1));
 	let op2 = self.bus.read_byte(self.pc.wrapping_add(2));
 	let opw = ((op2 as u16) << 8) | op1 as u16;
@@ -292,60 +390,78 @@ impl Cpu {
 	//disas(self.pc, instr.opcode, op1, op2, opw);
 
 	self.pc = self.pc.wrapping_add(instr.bytes as u16);
-	
-	match instr.mnemonic {
-	    "MOV" => {
-		match d_bits {
-		    0 => self.b = s,
-		    1 => self.c = s,
-		    2 => self.d = s,
-		    3 => self.e = s,
-		    4 => self.h = s,
-		    5 => self.l = s,
-		    6 => self.bus.write_byte(hlptr, s),
-		    _ => self.a = s,
-		};
+
+	match opcode {
+	    0x00 | 0x10 | 0x20 | 0x30 |
+	    0x08 | 0x18 | 0x28 | 0x38 => { //NOP
+		//nothing
 	    },
-	    "MVI" => {
-		match d_bits {
-		    0 => self.b = op1,
-		    1 => self.c = op1,
-		    2 => self.d = op1,
-		    3 => self.e = op1,
-		    4 => self.h = op1,
-		    5 => self.l = op1,
-		    6 => self.bus.write_byte(hlptr, op1),
-		    _ => self.a = op1,
-		};
+	    0x76 => { //HLT
+		return 0; //todo proper behavior
 	    },
-	    "LXI" => {
+	    0x40..=0x7f => { //MOV r1, r2
+		self.movb(d_bits, s, hlptr);
+	    },
+	    0x06 | 0x16 | 0x26 | 0x36 |
+	    0x0e | 0x1e | 0x2e | 0x3e => { //MVI
+		self.movb(d_bits, op1, hlptr);
+	    },
+	    0x01 | 0x11 | 0x21 | 0x31 => { //LXI
 		self.write_rp(rp, opw);
 	    },
-	    "LDA" => {
-		self.a = self.bus.read_byte(opw);
+	    0x02 | 0x12 => { //STAX
+		let tmp = self.read_rp(rp);
+		self.bus.write_byte(tmp, self.a);
 	    },
-	    "STA" => {
-		self.bus.write_byte(opw, self.a);
+	    0x0a | 0x1a => { //LDAX
+		let tmp = self.read_rp(rp);
+		self.a = self.bus.read_byte(tmp);
 	    },
-	    "LHLD" => {
-		let lo = self.bus.read_byte(opw);
-		let hi = self.bus.read_byte(opw + 1);
-		self.write_rp(2, ((hi as u16) << 8) | lo as u16);
-	    },
-	    "SHLD" => {
+	    0x22 => { //SHLD
 		let tmp = self.read_rp(2);
 		self.bus.write_byte(opw, (tmp & 0xff) as u8);
 		self.bus.write_byte(opw + 1, ((tmp >> 8) & 0xff) as u8);
 	    },
-	    "LDAX" => { //todo: only bc and de should be allowed
-		let tmp = self.read_rp(rp);
-		self.a = self.bus.read_byte(tmp);
+	    0x2a => { //LHLD
+		let lo = self.bus.read_byte(opw);
+		let hi = self.bus.read_byte(opw + 1);
+		self.write_rp(2, ((hi as u16) << 8) | lo as u16);
 	    },
-	    "STAX" => { // ""
-		let tmp = self.read_rp(rp);
-		self.bus.write_byte(tmp, self.a);
+	    0x32 => { //STA
+		self.bus.write_byte(opw, self.a);
 	    },
-	    "XCHG" => {
+	    0x3a => { //LDA
+		self.a = self.bus.read_byte(opw);
+	    },
+	    0xc5 | 0xd5 | 0xe5 | 0xf5 => { //PUSH
+		let mut tmp = self.read_rp(rp);
+		if rp == 3 {
+		    tmp = ((self.a as u16) << 8) | (self.f.as_u8() as u16);
+		}
+		self.push_word(tmp);
+	    },
+	    0xc1 | 0xd1 | 0xe1 | 0xf1 => { //POP
+		let tmp = self.pop_word();
+		if rp != 3 {
+		    self.write_rp(rp, tmp);
+		} else {
+		    self.a = ((tmp & 0xff00) >> 8) as u8;
+		    self.f = PSW::from_bits((tmp & 0x00ff) as u8).unwrap();
+		    self.f.insert(PSW::F1);
+		    self.f.remove(PSW::F5);
+		    self.f.remove(PSW::F3);
+		}
+	    },
+	    0xe3 => { //XTHL
+		let tmp = self.pop_word();
+		let hl = self.read_rp(2);
+		self.push_word(hl);
+		self.write_rp(2, tmp);
+	    },
+	    0xf9 => { //SPHL
+		self.sp = self.read_rp(2);
+	    },
+	    0xeb => { //XCHG
 		let tmp = self.h;
 		self.h = self.d;
 		self.d = tmp;
@@ -353,87 +469,32 @@ impl Cpu {
 		self.l = self.e;
 		self.e = tmp;
 	    },
-	    "ADD" => {
-		let mut tmp = self.a as u16;
-		tmp = tmp.wrapping_add(s as u16);
-		self.f.set(PSW::A, ((self.a & 0xf) + (s & 0xf)) > 0x0f);
-		self.f.set(PSW::C, tmp > 0xff);
-		self.f.set(PSW::Z, (tmp & 0xff) == 0);
-		self.f.set(PSW::S, (tmp & 0x80) != 0);
-		self.f.set(PSW::P, (((tmp & 0xff) as u8).count_ones() % 2) == 0);
-		self.a = tmp as u8;
+	    0x03 | 0x13 | 0x23 | 0x33 => { //INX
+		let tmp = self.read_rp(rp);
+		self.write_rp(rp, tmp.wrapping_add(1));
 	    },
-	    "ADI" => {
-		let mut tmp = self.a as u16;
-		tmp = tmp.wrapping_add(op1 as u16);
-		self.f.set(PSW::A, ((self.a & 0xf) + (op1 & 0xf)) > 0x0f);
-		self.f.set(PSW::C, tmp > 0xff);
-		self.f.set(PSW::Z, (tmp & 0xff) == 0);
-		self.f.set(PSW::S, (tmp & 0x80) != 0);
-		self.f.set(PSW::P, (((tmp & 0xff) as u8).count_ones() % 2) == 0);
-		self.a = tmp as u8;
+	    0x0b | 0x1b | 0x2b | 0x3b => { //DCX
+		let tmp = self.read_rp(rp);
+		self.write_rp(rp, tmp.wrapping_sub(1));
 	    },
-	    "ADC" => {
-		let mut tmp = self.a as u16;
-		tmp = tmp.wrapping_add(s as u16).wrapping_add(self.f.contains(PSW::C) as u16);
-		self.f.set(PSW::A, ((self.a & 0xf) + (s & 0xf) + self.f.contains(PSW::C) as u8) > 0x0f);
-		self.f.set(PSW::C, tmp > 0xff);
-		self.f.set(PSW::Z, (tmp & 0xff) == 0);
-		self.f.set(PSW::S, (tmp & 0x80) != 0);
-		self.f.set(PSW::P, (((tmp & 0xff) as u8).count_ones() % 2) == 0);
-		self.a = tmp as u8;
+	    0x09 | 0x19 | 0x29 | 0x39 => { //DAD
+		let hltmp = self.read_rp(2) as u32;
+		let rptmp = self.read_rp(rp) as u32;
+		let tmp = hltmp + rptmp;
+		self.f.set(PSW::C, tmp > 0xffff);
+		self.write_rp(2, tmp as u16);
 	    },
-	    "ACI" => {
-		let mut tmp = self.a as u16;
-		tmp = tmp.wrapping_add(op1 as u16).wrapping_add(self.f.contains(PSW::C) as u16);
-		self.f.set(PSW::A, ((self.a & 0xf) + (op1 & 0xf) + self.f.contains(PSW::C) as u8) > 0x0f);
-		self.f.set(PSW::C, tmp > 0xff);
-		self.f.set(PSW::Z, (tmp & 0xff) == 0);
-		self.f.set(PSW::S, (tmp & 0x80) != 0);
-		self.f.set(PSW::P, (((tmp & 0xff) as u8).count_ones() % 2) == 0);
-		self.a = tmp as u8;
+	    0x80..=0xbf => { //aluops a, r
+		let op_bits: u8 = (opcode & 0x38) >> 3;
+		self.aluop(op_bits, s);
 	    },
-	    "SUB" => {
-		let mut tmp = self.a as u16;
-		tmp = tmp.wrapping_sub(s as u16);
-		self.f.set(PSW::A, ((self.a & 0xf) + ((!s & 0xff) & 0xf) + 1) > 0x0f);
-		self.f.set(PSW::C, tmp > 0xff);
-		self.f.set(PSW::Z, (tmp & 0xff) == 0);
-		self.f.set(PSW::S, (tmp & 0x80) != 0);
-		self.f.set(PSW::P, (((tmp & 0xff) as u8).count_ones() % 2) == 0);
-		self.a = tmp as u8;
+	    0xc6 | 0xd6 | 0xe6 | 0xf6 |
+	    0xce | 0xde | 0xee | 0xfe => { //aluops a, d8
+		let op_bits: u8 = (opcode & 0x38) >> 3;
+		self.aluop(op_bits, op1);
 	    },
-	    "SUI" => {
-		let mut tmp = self.a as u16;
-		tmp = tmp.wrapping_sub(op1 as u16);
-		self.f.set(PSW::A, ((self.a & 0xf) + ((!op1 & 0xff) & 0xf) + 1) > 0x0f);
-		self.f.set(PSW::C, tmp > 0xff);
-		self.f.set(PSW::Z, (tmp & 0xff) == 0);
-		self.f.set(PSW::S, (tmp & 0x80) != 0);
-		self.f.set(PSW::P, (((tmp & 0xff) as u8).count_ones() % 2) == 0);
-		self.a = tmp as u8;
-	    },
-	    "SBB" => {
-		let mut tmp = self.a as u16;
-		tmp = tmp.wrapping_sub(s as u16).wrapping_sub(self.f.contains(PSW::C) as u16);
-		self.f.set(PSW::A, ((self.a & 0xf) + ((!s & 0xff) & 0xf) + !self.f.contains(PSW::C) as u8) > 0x0f);
-		self.f.set(PSW::C, tmp > 0xff);
-		self.f.set(PSW::Z, (tmp & 0xff) == 0);
-		self.f.set(PSW::S, (tmp & 0x80) != 0);
-		self.f.set(PSW::P, (((tmp & 0xff) as u8).count_ones() % 2) == 0);
-		self.a = tmp as u8;
-	    },
-	    "SBI" => {
-		let mut tmp = self.a as u16;
-		tmp = tmp.wrapping_sub(op1 as u16).wrapping_sub(self.f.contains(PSW::C) as u16);
-		self.f.set(PSW::A, ((self.a & 0xf) + ((!op1 & 0xff) & 0xf) + !self.f.contains(PSW::C) as u8) > 0x0f);
-		self.f.set(PSW::C, tmp > 0xff);
-		self.f.set(PSW::Z, (tmp & 0xff) == 0);
-		self.f.set(PSW::S, (tmp & 0x80) != 0);
-		self.f.set(PSW::P, (((tmp & 0xff) as u8).count_ones() % 2) == 0);
-		self.a = tmp as u8;
-	    },
-	    "INR" => {
+	    0x04 | 0x14 | 0x24 | 0x34 |
+	    0x0c | 0x1c | 0x2c | 0x3c => { //INR
 		let mut tmp = d.wrapping_add(1) as u16;
 		if d_bits == 6 {
 		    tmp = self.bus.read_byte(hlptr).wrapping_add(1) as u16;
@@ -454,7 +515,8 @@ impl Cpu {
 		    _ => self.a = tmp,
 		};
 	    },
-	    "DCR" => {
+	    0x05 | 0x15 | 0x25 | 0x35 |
+	    0x0d | 0x1d | 0x2d | 0x3d => { //DCR
 		let mut tmp = d.wrapping_sub(1) as u16;
 		if d_bits == 6 {
 		    tmp = self.bus.read_byte(hlptr).wrapping_sub(1) as u16;
@@ -475,22 +537,18 @@ impl Cpu {
 		    _ => self.a = tmp,
 		};
 	    },
-	    "INX" => {
-		let tmp = self.read_rp(rp);
-		self.write_rp(rp, tmp.wrapping_add(1));
+	    0x07 => { //RLC
+		self.f.set(PSW::C, ((self.a & 0x80) >> 7) != 0);
+		self.a = self.a << 1;
+		self.a = self.a | (self.f.contains(PSW::C) as u8);
 	    },
-	    "DCX" => {
-		let tmp = self.read_rp(rp);
-		self.write_rp(rp, tmp.wrapping_sub(1));
+	    0x17 => { //RAL
+		let tmp = self.f.contains(PSW::C) as u8;
+		self.f.set(PSW::C, ((self.a & 0x80) >> 7) != 0);
+		self.a = self.a << 1;
+		self.a = self.a | tmp;
 	    },
-	    "DAD" => {
-		let hltmp = self.read_rp(2) as u32;
-		let rptmp = self.read_rp(rp) as u32;
-		let tmp = hltmp + rptmp;
-		self.f.set(PSW::C, tmp > 0xffff);
-		self.write_rp(2, tmp as u16);
-	    },
-	    "DAA" => {
+	    0x27 => { //DAA
 		let mut tmp = self.a as u16;
 		if ((tmp & 0x0f) > 0x09) || self.f.contains(PSW::A) {
 		    self.f.set(PSW::A, (((tmp & 0x0f) + 0x06) & 0xf0) != 0);
@@ -510,199 +568,49 @@ impl Cpu {
 		self.f.set(PSW::P, (((tmp & 0xff) as u8).count_ones() % 2) == 0);
 		self.a = tmp as u8;
 	    },
-	    "ANA" => {
-		let tmp = self.a & s;
-		self.f.set(PSW::C, false);
-		self.f.set(PSW::A, ((self.a | s) & 0x08) != 0);
-		self.f.set(PSW::Z, tmp == 0);
-		self.f.set(PSW::S, (tmp & 0x80) != 0);
-		self.f.set(PSW::P, ((tmp & 0xff).count_ones() % 2) == 0);
-		self.a = tmp;
+	    0x37 => { //STC
+		self.f.insert(PSW::C);
 	    },
-	    "ANI" => {
-		let tmp = self.a & op1;
-		self.f.set(PSW::C, false);
-		//self.f.set(PSW::A, false); //1975 manual seems to be wrong about this
-		//according to the later 1979 mcs-80/85 manual ani has the same ac
-		//behavior as ana
-		self.f.set(PSW::A, ((self.a | op1) & 0x08) != 0);
-		self.f.set(PSW::Z, tmp == 0);
-		self.f.set(PSW::S, (tmp & 0x80) != 0);
-		self.f.set(PSW::P, ((tmp & 0xff).count_ones() % 2) == 0);
-		self.a = tmp;
-	    },
-	    "XRA" => {
-		let tmp = self.a ^ s;
-		self.f.set(PSW::C, false);
-		self.f.set(PSW::A, false);
-		self.f.set(PSW::Z, tmp == 0);
-		self.f.set(PSW::S, (tmp & 0x80) != 0);
-		self.f.set(PSW::P, ((tmp & 0xff).count_ones() % 2) == 0);
-		self.a = tmp;
-	    },
-	    "XRI" => {
-		let tmp = self.a ^ op1;
-		self.f.set(PSW::C, false);
-		self.f.set(PSW::A, false);
-		self.f.set(PSW::Z, tmp == 0);
-		self.f.set(PSW::S, (tmp & 0x80) != 0);
-		self.f.set(PSW::P, ((tmp & 0xff).count_ones() % 2) == 0);
-		self.a = tmp;
-	    },
-	    "ORA" => {
-		let tmp = self.a | s;
-		self.f.set(PSW::C, false);
-		self.f.set(PSW::A, false);
-		self.f.set(PSW::Z, tmp == 0);
-		self.f.set(PSW::S, (tmp & 0x80) != 0);
-		self.f.set(PSW::P, ((tmp & 0xff).count_ones() % 2) == 0);
-		self.a = tmp;
-	    },
-	    "ORI" => {
-		let tmp = self.a | op1;
-		self.f.set(PSW::C, false);
-		self.f.set(PSW::A, false);
-		self.f.set(PSW::Z, tmp == 0);
-		self.f.set(PSW::S, (tmp & 0x80) != 0);
-		self.f.set(PSW::P, ((tmp & 0xff).count_ones() % 2) == 0);
-		self.a = tmp;
-	    },
-	    "CMP" => {
-		let mut tmp = self.a as u16;
-		tmp = tmp.wrapping_sub(s as u16);
-		self.f.set(PSW::A, ((self.a & 0xf) + ((!s & 0xff) & 0xf) + 1) > 0x0f);
-		self.f.set(PSW::C, tmp > 0xff);
-		self.f.set(PSW::Z, (tmp & 0xff) == 0);
-		self.f.set(PSW::S, (tmp & 0x80) != 0);
-		self.f.set(PSW::P, (((tmp & 0xff) as u8).count_ones() % 2) == 0);
-	    },
-	    "CPI" => {
-		let mut tmp = self.a as u16;
-		tmp = tmp.wrapping_sub(op1 as u16);
-		self.f.set(PSW::A, ((self.a & 0xf) + ((!op1 & 0xff) & 0xf) + 1) > 0x0f);
-		self.f.set(PSW::C, tmp > 0xff);
-		self.f.set(PSW::Z, (tmp & 0xff) == 0);
-		self.f.set(PSW::S, (tmp & 0x80) != 0);
-		self.f.set(PSW::P, (((tmp & 0xff) as u8).count_ones() % 2) == 0);
-	    },
-	    "RLC" => {
-		self.f.set(PSW::C, ((self.a & 0x80) >> 7) != 0);
-		self.a = self.a << 1;
-		self.a = self.a | (self.f.contains(PSW::C) as u8);
-	    },
-	    "RRC" => {
+	    0x0f => { //RRC
 		self.f.set(PSW::C, (self.a & 1) != 0);
 		self.a = ((self.a & 1) << 7) | (self.a >> 1);
 	    },
-	    "RAL" => {
-		let tmp = self.f.contains(PSW::C) as u8;
-		self.f.set(PSW::C, ((self.a & 0x80) >> 7) != 0);
-		self.a = self.a << 1;
-		self.a = self.a | tmp;
-	    },
-	    "RAR" => {
+	    0x1f => { //RAR
 		let tmp = (self.f.contains(PSW::C) as u8) << 7;
 		self.f.set(PSW::C, (self.a & 1) != 0);
 		self.a = self.a >> 1;
 		self.a = self.a | tmp;
 	    },
-	    "CMA" => {
+	    0x2f => { //CMA
 		self.a = !self.a;
 	    },
-	    "CMC" => {
+	    0x3f => { //CMC
 		self.f.toggle(PSW::C);
 	    },
-	    "STC" => {
-		self.f.insert(PSW::C);
-	    },
-	    "JMP" | "*JMP" => {
-		self.pc = opw;
-	    },
-	    "JNZ" | "JZ" | "JNC" | "JC" |
-	    "JPO" | "JPE" | "JP" | "JM" => {
-		if cond {
-		    self.pc = opw;
-		}
-	    },
-	    "CALL" => {
-		self.push_word(self.pc);
-		self.pc = opw;
-	    },
-	    "CNZ" | "CZ" | "CNC" | "CC" |
-	    "CPO" | "CPE" | "CP" | "CM" => {
-		if cond {
-		    self.push_word(self.pc);
-		    self.pc = opw;
-		    self.cycles += 6;
-		}
-	    },
-	    "RET" => {
-		self.pc = self.pop_word();
-	    },
-	    "RNZ" | "RZ" | "RNC" | "RC" |
-	    "RPO" | "RPE" | "RP" | "RM" => {
-		if cond {
-		    self.pc = self.pop_word();
-		    self.cycles += 6;
-		}
-	    },
-	    "RST" => {
-		self.push_word(self.pc);
-		self.pc = (n << 3) as u16;
-	    },
-	    "PCHL" => {
+	    0xe9 => { //PCHL
 		self.pc = hlptr;
 	    },
-	    "PUSH" => {
-		let mut tmp = self.read_rp(rp);
-		if rp == 3 {
-		    tmp = ((self.a as u16) << 8) | (self.f.as_u8() as u16);
-		}
-		self.push_word(tmp);
+	    0xc0 | 0xc2..=0xc4 | 0xc7..=0xcd | 0xcf |
+	    0xd0 | 0xd2 | 0xd4 | 0xd7..=0xda | 0xdc | 0xdd | 0xdf |
+	    0xe0 | 0xe2 | 0xe4 | 0xe7..=0xea | 0xec | 0xed | 0xef |
+	    0xf0 | 0xf2 | 0xf4 | 0xf7 | 0xf8 | 0xfa | 0xfc | 0xfd |
+	    0xff => { //branches
+		self.branch((opcode & 6) >> 1, c, opcode & 1, opw);
 	    },
-	    "POP" => {
-		let tmp = self.pop_word();
-		if rp != 3 {
-		    self.write_rp(rp, tmp);
-		} else {
-		    self.a = ((tmp & 0xff00) >> 8) as u8;
-		    self.f = PSW::from_bits((tmp & 0x00ff) as u8).unwrap();
-		    self.f.insert(PSW::F1);
-		    self.f.remove(PSW::F5);
-		    self.f.remove(PSW::F3);
-		}
-	    },
-	    "XTHL" => {
-		let tmp = self.pop_word();
-		let hl = self.read_rp(2);
-		self.push_word(hl);
-		self.write_rp(2, tmp);
-	    },
-	    "SPHL" => {
-		self.sp = self.read_rp(2);
-	    },
-	    "IN" => {
-		self.a = self.bus.read_io_byte(op1);
-	    },
-	    "OUT" => {
+	    0xd3 => { //OUT
 		self.bus.write_io_byte(op1, self.a);
 	    },
-	    "EI" => {
-		self.ei_pend = true;
+	    0xdb => { //IN
+		self.a = self.bus.read_io_byte(op1);
 	    },
-	    "DI" => {
+	    0xf3 => { //DI
 		self.ime = false;
 	    },
-	    "HLT" => { //todo use actual behavior
-		return 0;
+	    0xfb => { //EI
+		self.ei_pend = true;
 	    },
-	    "NOP" | "*NOP" => {
-		//nothing
-	    },
-	    _ =>
-		todo!("Unimplemented instruction {}", instr.mnemonic),
 	};
-
+	    
 	self.cycles - oldcycles
     }
 }
