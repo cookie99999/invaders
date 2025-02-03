@@ -61,8 +61,8 @@ impl Bus for CpmBus {
     }
 
     fn write_word(&mut self, addr: u16, data: u16) {
-	self.write_byte(addr, (data >> 8) as u8);
-	self.write_byte(addr + 1, (data & 0x00ff) as u8);
+	self.write_byte(addr + 1, (data >> 8) as u8);
+	self.write_byte(addr, (data & 0x00ff) as u8);
     }
 
     fn read_io_byte(&mut self, port: u8) -> u8 {
@@ -123,8 +123,8 @@ impl Bus for InvBus {
     }
 
     fn write_word(&mut self, addr: u16, data: u16) {
-	self.write_byte(addr, (data >> 8) as u8);
-	self.write_byte(addr + 1, (data & 0x00ff) as u8);
+	self.write_byte(addr + 1, (data >> 8) as u8);
+	self.write_byte(addr, (data & 0x00ff) as u8);
     }
 
     fn read_io_byte(&mut self, port: u8) -> u8 {
