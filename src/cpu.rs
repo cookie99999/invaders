@@ -123,10 +123,11 @@ pub struct Cpu {
     instr_set: &'static [Instruction; 256],
     pub cycles: usize,
     ei_pend: bool,
+    dbg: bool,
 }
 
 impl Cpu {
-    pub fn new(cpm: bool) -> Self {
+    pub fn new(dbg: bool) -> Self {
 	/*if cpm {
 	    Cpu {
 	    a: 0,
@@ -143,6 +144,8 @@ impl Cpu {
 	    bus: bus::CpmBus::new(),
 	    instr_set: &INSTR_SET_INTEL,
 	    cycles: 0,
+	    ei_pend: false,
+	    dbg: dbg,
 	    }
 	} else {*/
 	Cpu {
@@ -161,6 +164,7 @@ impl Cpu {
 	    instr_set: &INSTR_SET_INTEL,
 	    cycles: 0,
 	    ei_pend: false,
+	    dbg: dbg,
 	    }
 	//}
     }
@@ -345,14 +349,13 @@ impl Cpu {
 	    //after this instruction runs so we have effectively
 	    //gotten the one instruction delay specified in the manual
 	}
-	//todo: decode extended opcodes
+	
 	let instr: &Instruction = &self.instr_set[opcode as usize];
 	self.cycles += instr.cycles as usize;
 	let d_bits = (opcode >> 3) & 7;
 	let s = opcode & 7;
 	let rp = (opcode >> 4) & 3;
 	let c = d_bits;
-	let n = d_bits;
 	let hlptr = self.read_rp(2);
 
 	let s = match s {
@@ -381,9 +384,11 @@ impl Cpu {
 	let op2 = self.bus.read_byte(self.pc.wrapping_add(2));
 	let opw = ((op2 as u16) << 8) | op1 as u16;
 
-	//println!("A {:02X} F {:02X} B {:02X} C {:02X} D {:02X} E {:02X} H {:02X} L {:02X} SP {:04X}, CYC: {} ime {}",
-	//	 self.a, self.f.as_u8(), self.b, self.c, self.d, self.e, self.h, self.l, self.sp, self.cycles, self.ime);
-	//disas(self.pc, instr.opcode, op1, op2, opw);
+	if self.dbg {
+	    println!("A {:02X} F {:02X} B {:02X} C {:02X} D {:02X} E {:02X} H {:02X} L {:02X} SP {:04X}, CYC: {} ime {}",
+		     self.a, self.f.as_u8(), self.b, self.c, self.d, self.e, self.h, self.l, self.sp, self.cycles, self.ime);
+	    disas(self.pc, instr.opcode, op1, opw);
+	}
 
 	self.pc = self.pc.wrapping_add(instr.bytes as u16);
 
@@ -610,7 +615,7 @@ impl Cpu {
     }
 }
 
-fn disas(pc: u16, opcode: u8, op1: u8, op2: u8, opw: u16) {
+fn disas(pc: u16, opcode: u8, op1: u8, opw: u16) {
     print!("{:04X} ", pc);
     match opcode {
 	0x00 => println!("NOP"),
@@ -872,7 +877,7 @@ fn disas(pc: u16, opcode: u8, op1: u8, op2: u8, opw: u16) {
     };
 }
 
-fn disas_zilog(pc: u16, opcode: u8, op1: u8, op2: u8, opw: u16) {
+fn disas_zilog(pc: u16, opcode: u8, op1: u8, opw: u16) {
     print!("{:04X} ", pc);
     match opcode {
 	0x00 => println!("NOP"),

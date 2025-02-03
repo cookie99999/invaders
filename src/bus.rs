@@ -154,7 +154,7 @@ impl Bus for InvBus {
 	    3 => {
 		let bits = data & 0xf;
 		for i in 0..4 {
-		    self.sfx[i] = if (bits >> i) & 1 != 0 {
+		    self.sfx[i] = if (bits >> i) & 1 != 0 { //todo use sfx_last and only play on 0->1 edge
 			println!("playing sfx {}", i);
 			true
 		    } else {
