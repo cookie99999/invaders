@@ -126,7 +126,7 @@ pub struct Cpu {
 }
 
 impl Cpu {
-    pub fn new(cpm: bool) -> Self {
+    pub fn new() -> Self {
 	/*if cpm {
 	    Cpu {
 	    a: 0,
