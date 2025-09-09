@@ -205,7 +205,7 @@ impl Bus for InvBus {
 	    self.cycles -= 16667 / 2;
 	    self.half = false;
 	}
-
+  
 	if self.cycles >= 16667 { //~1 frame
 	    self.irq = true;
 	    self.irq_vec = 0xd7; //RST 10

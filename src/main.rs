@@ -34,7 +34,7 @@ fn draw(bus: &mut bus::InvBus, tex: &mut sdl2::render::Texture) {
 }
 	    
 fn main() {
-    let mut cpu = cpu::Cpu::new(false);
+    let mut cpu = cpu::Cpu::new();
     let mut stdin = io::stdin();
 
     let path = env::args().nth(1).expect("Usage: invaders <path>");
